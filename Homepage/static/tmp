@@ -1,0 +1,132 @@
+
+<section class="section">
+  <div class="container">
+    <div class="columns is-centered has-text-centered">
+        <div class="column is-four-fifths" style="width: 100%;">
+        <h2 class="title is-3">Data Examples</h2>
+        <div class="content has-text-justified">
+          <!-- <p style="text-align: center;", class="mt-3"><strong>See the <a href="index.explorer">VideoChat-Online Explorer</a> for more videos and human-annotated/model-generated descriptions.</strong>
+          </p> -->
+
+        <div id="results-carousel" class="carousel results-carousel">
+          <div class="item">
+            <div style="text-align: center;">
+              <video src="static/videos/work.mp4"  width="55%" controls style="margin-bottom: 30px;">
+              </video>
+              <!-- <p class="video-title">Video Categorie: Temporal grounding</p>  -->
+            </div>
+            <div class="answer-text">
+              <p>
+                <strong style="color: #ec9720;">(t=18.4s) User:</strong>When did the person start working on her laptop? If it's ongoing, format the response as: <b>&lt;start time&gt; - now (duration: &lt;x&gt; seconds)</b>. If it's over, format the response as: <b>&lt;start time&gt; - &lt;end time&gt; (duration: &lt;x&gt; seconds)</b>. 
+                <br>               
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> The person started working on her laptop at 10.0s and is still working on it now (duration: 8.4 seconds).
+              </p>
+            </div>
+          </div>
+
+          <div class="item">
+            <div style="text-align: center;">
+              <video src="static/videos/food.mp4"  width="70%" controls style="margin-bottom: 30px;">
+              </video>
+              <!-- <p class="video-title">Video Categorie: xxx</p>  -->
+            </div>
+            <div class="answer-text">
+              <p>
+                <strong style="color: #ec9720;">(t=25.0s) User:</strong> How many ingredients are shown in the past 15 seconds?
+                <br>
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> Five ingredients are shown in the past 15 seconds.
+              </p>
+            </div>
+          </div>
+
+          <div class="item">
+            <div style="text-align: center;">
+              <video src="static/videos/dumplings.mp4"  width="60%" controls style="margin-bottom: 30px;">
+              </video>
+              <!-- <p class="video-title">Video Categorie: Dense captioning</p>  -->
+            </div>
+            <div class="answer-text">
+              <p></p>
+                <strong style="color: #ec9720;">(t=83.3s) User:</strong> Summarize the events in details that ended up to the current frame and were not mentioned in earlier responses. For each event, include the duration. Format your response as: <b>&lt;start time&gt; - &lt;end time&gt; (duration: &lt;x&gt; seconds), &lt;description&gt;</b>. 
+                <br>               
+                <strong style="color: #008AD7;">(t=83.3s) VideoChat-Online:</strong> 54s - 70s (duration: 16.0 seconds), add flour salt and oil to a bowl.
+                <br>
+                71s - 83s (duration: 12.0 seconds), mix the ingredients together.
+                <br>       
+                <strong style="color: #008AD7;">(t=138.8s) VideoChat-Online:</strong> 84s - 100s (duration: 16.0 seconds), add water to the bowl and mix.
+                <br>
+                101s - 130s (duration: 29.0 seconds), knead the dough.
+                <br>
+                <strong style="color: #008AD7;">(t=194.4s) VideoChat-Online:</strong> 131s - 180s (duration: 49.0 seconds), cover the dough and let it rest.
+                <br>
+                <strong style="color: #008AD7;">(t=286.9s) VideoChat-Online:</strong> 181s - 290s (duration: 109.0 seconds), roll the dough out and cut into pieces.
+                <br>         
+                <strong style="color: #008AD7;">(t=330.1s) VideoChat-Online:</strong> 291s - 334s (duration: 43.0 seconds), fry the dough in oil.
+              </p>
+              <!-- <p>
+                <strong style="color: #ec9720;">User (Question at 83.3s):</strong> Summarize the events in details that ended up to the current frame and were not mentioned in earlier responses. For each event, include the duration. Format your response as: <b>&lt;start time&gt; - &lt;end time&gt; (duration: &lt;x&gt; seconds), &lt;description&gt;</b>. 
+                <br>               
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> 54s - 70s (duration: 16.0 seconds), add flour salt and oil to a bowl.
+                <br>
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> 71s - 83s (duration: 12.0 seconds), mix the ingredients together.
+              </p>  
+              <p>
+                <strong style="color: #ec9720;">User (Question at 138.8s):</strong>  &lt;None&gt;     
+                <br>       
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> 84s - 100s (duration: 16.0 seconds), add water to the bowl and mix.
+                <br>
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> 101s - 130s (duration: 29.0 seconds), knead the dough.
+              </p>
+              <p>
+                <strong style="color: #ec9720;">User (Question at 194.4s):</strong>  &lt;None&gt;
+                <br>
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> 131s - 180s (duration: 49.0 seconds), cover the dough and let it rest.
+              </p>
+              <p>
+                <strong style="color: #ec9720;">User (Question at 286.9s):</strong>  &lt;None&gt;
+                <br>
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> 181s - 290s (duration: 109.0 seconds), roll the dough out and cut into pieces.
+              </p>  
+              <p>
+                <strong style="color: #ec9720;">User (Question at 330.1s):</strong>  &lt;None&gt;   
+                <br>         
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> 291s - 334s (duration: 43.0 seconds), fry the dough in oil.
+              </p> -->
+            </div>
+          </div>
+
+          <div class="item">
+            <div style="text-align: center;">
+              <video src="static/videos/hiddenObject.mp4"  width="70%" controls style="margin-bottom: 30px;">
+              </video>
+              <!-- <p class="video-title">Video Categorie: xxx</p>  -->
+            </div>
+            <div class="answer-text">
+              <p>
+                <strong style="color: #ec9720;">(t=end of the video) User:</strong> The person uses multiple similar objects to play an occlusion game. Where is the hidden object currently from the person's point of view (left, middle or right)?
+                <br>
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> The hidden object is currently in the middle from the person's point of view.
+              </p>
+            </div>
+          </div>
+
+
+          <div class="item">
+            <div style="text-align: center;">
+              <video src="static/videos/run.mp4"  width="30%" controls style="margin-bottom: 30px;">
+              </video>
+              <!-- <p class="video-title">Video Categorie: Temporal grounding</p>  -->
+            </div>
+            
+            <div class="answer-text">
+              <p>
+                <strong style="color: #ec9720;">(t=11.7s) User:</strong>When did the person runs through the doorway? If it's ongoing, format the response as: <b>&lt;start time&gt; - now (duration: &lt;x&gt; seconds)</b>. If it's over, format the response as: <b>&lt;start time&gt; - &lt;end time&gt; (duration: &lt;x&gt; seconds)</b>. 
+                <br>               
+                <strong style="color: #008AD7;">VideoChat-Online:</strong> The person runs through the doorway from 0.0s to 2.9s (duration: 2.9 seconds).
+              </p>
+            </div>
+          </div>
+        </div> 
+    </div>     
+  </div>
+</section>

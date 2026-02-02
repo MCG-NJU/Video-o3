@@ -1,0 +1,208 @@
+body {
+  font-family: 'Noto Sans', sans-serif;
+}
+
+
+.footer .icon-link {
+    font-size: 25px;
+    color: #000;
+}
+
+.link-block a {
+    margin-top: 5px;
+    margin-bottom: 5px;
+}
+
+@font-face {
+  font-family: 'CustomFont';
+  src: url('../Gilroy Bold Italic.otf') format('truetype');
+}
+
+.mathvista_other {
+  font-variant: small-caps;
+  font-weight: bold;
+}
+
+.mathvista {
+  /* font-variant: small-caps; */
+  font-family: 'CustomFont', sans-serif;
+  font-size: 80px;
+}
+
+.teaser .hero-body {
+  padding-top: 0;
+  padding-bottom: 3rem;
+}
+
+.teaser {
+  font-family: 'Google Sans', sans-serif;
+}
+
+
+.publication-title {
+}
+
+.publication-banner {
+  max-height: parent;
+
+}
+
+.publication-banner video {
+  position: relative;
+  left: auto;
+  top: auto;
+  transform: none;
+  object-fit: fit;
+}
+
+.publication-header .hero-body {
+}
+
+.publication-title {
+    font-family: 'Google Sans', sans-serif;
+}
+
+.publication-authors {
+    font-family: 'Google Sans', sans-serif;
+}
+
+.publication-venue {
+    color: #555;
+    width: fit-content;
+    font-weight: bold;
+}
+
+.publication-awards {
+    color: #ff3860;
+    width: fit-content;
+    font-weight: bolder;
+}
+
+.publication-authors {
+}
+
+.publication-authors a {
+   color: hsl(204, 86%, 53%) !important;
+}
+
+.publication-authors a:hover {
+    text-decoration: underline;
+}
+
+.author-block {
+  display: inline-block;
+}
+
+.publication-banner img {
+}
+
+.publication-authors {
+  /*color: #4286f4;*/
+}
+
+.publication-video {
+    position: relative;
+    width: 100%;
+    height: 0;
+    padding-bottom: 56.25%;
+
+    overflow: hidden;
+    border-radius: 10px !important;
+}
+
+.publication-video iframe {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.publication-body img {
+}
+
+.results-carousel {
+  overflow: hidden;
+}
+
+/* .results-carousel .item {
+  margin-right: 10%;
+  margin-left: 10%;
+  max-height: 2000px; 
+  overflow-y: auto;
+  padding: 20px;
+  font-size: 0;
+} */
+
+.results-carousel .item {
+  margin-right: 10%;
+  margin-left: 10%;
+  overflow: hidden;
+  padding: 20px;
+  font-size: 0; /* 保留，如果是为了去除空白 */
+}
+
+.answer-text {
+  font-size: 16px;
+  font-family: 'Arial', sans-serif;
+  margin-bottom: 20px;
+  max-height: 150px; /* 增大高度 */
+  overflow-y: auto;
+  line-height: 1.5; /* 改善文字间距 */
+}
+
+.video-title {
+  font-size: 18px; /* 字体大小 */
+  font-weight: bold; /* 字体加粗 */
+  color: #333; /* 字体颜色 */
+  text-align: center; /* 居中对齐 */
+  margin: 0px 0 20px; 
+  line-height: 1; /* 行高，保证可读性 */
+}
+
+.stats-image {
+  max-height: 250px;
+}
+
+#org-banners {
+  display:flex;
+  flex-direction: row;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.org-banner {
+  /* margin: 5px; */
+  max-width: 100%;
+  height: 6em;
+  margin: 10px;
+  padding: 10px;
+}
+
+@media screen and (max-width: 768px) {
+  #org-banners {
+    flex-direction: column;
+    justify-content: space-around;
+  }
+}
+
+.marker1::before {
+  content: "◆"; /* 菱形 */
+  color: blue;
+  margin-right: 5px;
+}
+
+.marker2::before {
+  content: "★"; /* 星星 */
+  color: green;
+  margin-right: 5px;
+}
+
+tr.class1 {
+  background-color: #e0f2f7; /* 浅蓝色 */
+}
+
+tr.class2 {
+  background-color: #ffe0b2; /* 浅绿色 */
+}

@@ -1,0 +1,653 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title> Video-o3 </title>
+
+  <link rel="icon" href="./Homepage/images/Video-o3_Logo.png">
+
+  <link href="https://fonts.googleapis.com/css?family=Google+Sans|Noto+Sans|Castoro" rel="stylesheet">
+
+  <link rel="stylesheet" href="./Homepage/static/css/bulma.min.css">
+  <link rel="stylesheet" href="./Homepage/static/css/bulma-carousel.min.css">
+  <link rel="stylesheet" href="./Homepage/static/css/bulma-slider.min.css">
+  <link rel="stylesheet" href="./Homepage/static/css/fontawesome.all.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/jpswalsh/academicons@1/css/academicons.min.css">
+  <link rel="stylesheet" href="./Homepage/static/css/index.css">
+  <link rel="stylesheet" href="./Homepage/static/css/leaderboard.css">
+  <link rel="stylesheet" href="./Homepage/static/css/video-player.css">
+
+  <!-- <link href="https://unpkg.com/tabulator-tables@5.5.2/dist/css/tabulator_bulma.min.css" rel="stylesheet">
+  <script type="text/javascript" src="https://unpkg.com/tabulator-tables@5.5.2/dist/js/tabulator.min.js"></script> -->
+  <script type="text/javascript" src="Homepage/static/js/sort-table.js" defer></script>
+
+  <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  <script defer src="./Homepage/static/js/fontawesome.all.min.js"></script>
+  <script src="./Homepage/static/js/bulma-carousel.min.js"></script>
+  <script src="./Homepage/static/js/bulma-slider.min.js"></script>
+  <script src="./Homepage/static/js/explorer-index.js"></script>
+
+  <script src="./Homepage/static/js/leaderboard_testmini.js"></script>  
+  
+  <style>
+    .no-sort {
+        cursor: default;
+        pointer-events: none;
+        background-image: none !important; /* Remove the sort arrow */
+    }
+
+    .rainbow-text {
+      background: linear-gradient(to right, #ef5350, #f48fb1, #7e57c2, #2196f3, #26c6da, #43a047, #eeff41, #f9a825, #ff5722);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      animation: rainbow 6s ease infinite;
+      background-size: 400% 100%;
+    }
+
+    @keyframes rainbow {
+      0%, 100% {
+        background-position: 0 0;
+      }
+      50% {
+        background-position: 100% 0;
+      }
+    }
+
+    /* Custom style for section headers to match body font */
+    .mathvista_other {
+      font-family: 'Google Sans', 'Noto Sans', 'Castoro', sans-serif !important;
+      font-weight: bold !important;
+      font-size: 2.5rem !important; /* Adjusted size */
+      text-transform: none !important; /* Prevent forced uppercase */
+      font-variant: normal !important; /* Prevent small-caps from index.css */
+    }
+  </style>
+
+</head>
+<body>
+
+  
+<!-- 上方导航栏：more research-->
+<nav class="navbar" role="navigation" aria-label="main navigation">
+  <div class="navbar-brand">
+    <a role="button" class="navbar-burger" aria-label="menu" aria-expanded="false">
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+      <span aria-hidden="true"></span>
+    </a>
+  </div>
+  <div class="navbar-menu">
+    <div class="navbar-start" style="flex-grow: 1; justify-content: center;">
+
+      <div class="navbar-item has-dropdown is-hoverable">
+        <p style="font-size:18px; display: inline; margin-right: -2px; margin-top: 12px;">🔥</p>
+        <a class="navbar-link">
+          More Research
+        </a>
+        <div class="navbar-dropdown">
+          <a class="navbar-item" href="https://github.com/OpenGVLab/TimeSuite">
+            <b>TimeSuite</b> 
+          </a>
+          <a class="navbar-item" href="https://happyzqy.github.io/StreamForest/">
+            <b>StreamForest</b> 
+          </a>
+          <!-- <a class="navbar-item" href="https://github.com/BradyFU/Awesome-Multimodal-Large-Language-Models">
+            <b>Awesome-MLLM</b> 
+          </a> -->
+        </div>
+      </div>
+    </div>
+
+  </div>
+</nav>
+
+
+<section class="hero">
+  <div class="hero-body">
+    <div class="container is-max-desktop">
+      <div class="columns is-centered">
+        <div class="column has-text-centered">
+          <h1 class="title is-1 publication-title is-bold">
+            <span style="position: relative; display: inline-block;">
+              <img src="Homepage/images/Video-o3_Logo.png" style="position: absolute; right: 100%; top: 50%; transform: translateY(-50%); width: 2.2em; margin-right: 0.4em;" alt="Logo"/>
+              <span class="Video-o3" style="vertical-align: middle">
+                <span class="rainbow-text">Video-o3</span>: Native Interleaved Clue Seeking for Long Video Multi-Hop Reasoning
+              </span>
+            </span>
+            </h1>
+          <div class="is-size-5 publication-authors">
+            <!-- Paper authors -->
+            <span class="author-block">
+              <a href="https://lanxingxuan.github.io/" style="color:#008AD7;font-weight:normal;">Xiangyu Zeng</a><sup>*,1,2</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Zhiqiu Zhang</span><sup>*,1,2</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Yuhan Zhu</span><sup>*,1,2</sup>,
+            </span>
+            <span class="author-block">
+              <a href="https://leexinhao.github.io/" style="color:#008AD7;font-weight:normal;">Xinhao Li</a><sup>*,1</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Zikang Wang</span><sup>*,3,2</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Changlian Ma</span><sup>1,2</sup>,
+            </span>
+            <span class="author-block">
+              <a href="https://happyzqy.github.io/" style="color:#008AD7;font-weight:normal;">Qingyu Zhang</a><sup>1</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Zizheng Huang</span><sup>1</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Kun Ouyang</span><sup>4</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Tianxiang Jiang</span><sup>5,2</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Ziang Yan</span><sup>6,2</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Yi Wang</span><sup>2</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Hongjie Zhang</span><sup>2</sup>,
+            </span>
+            <span class="author-block">
+              <span style="color:#008AD7;font-weight:normal;">Yali Wang</span><sup>7,2</sup>,
+            </span>
+            <span class="author-block">
+              <a href="https://wanglimin.github.io/" style="color:#008AD7;font-weight:normal;">Limin Wang</a><sup>†,1,2</sup>
+            </span>
+          </div>
+
+          <br>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>1</sup>Nanjing University</span>&nbsp;
+            <span class="author-block"><sup>2</sup>Shanghai AI Laboratory</span>&nbsp;
+            <span class="author-block"><sup>3</sup>Shanghai Jiao Tong University</span>&nbsp;
+            <span class="author-block"><sup>4</sup>Peking University</span>
+            <br>
+            <span class="author-block"><sup>5</sup>University of Science and Technology of China</span>&nbsp;
+            <span class="author-block"><sup>6</sup>Zhejiang University</span>&nbsp;
+            <span class="author-block"><sup>7</sup>SIAT, Chinese Academy of Sciences</span>
+          </div>
+
+          <div class="is-size-5 publication-authors">
+            <span class="author-block"><sup>*</sup>Equal contribution</span>&nbsp;
+            <span class="author-block"><sup>†</sup>Corresponding author</span>
+          </div>
+
+          <br>
+
+        <span class="link-block">
+
+          <div class="column has-text-centered">
+            <div class="publication-links">
+              <!-- PDF Link. -->
+              <span class="link-block">
+                <a href="https://arxiv.org/abs/2601.23224"
+                   class="external-link button is-normal is-rounded is-dark">
+                <!-- <a href="https://lupantech.github.io/papers/arxiv23_mathvista.pdf"
+                   class="external-link button is-normal is-rounded is-dark"> -->
+                  <span class="icon">
+                      <i class="ai ai-arxiv"></i>
+                  </span>
+                  <span>arXiv</span>
+                </a>
+              </span>
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href=""
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                    <p style="font-size:18px">📊</p>
+                  </span>
+                  <span>Model (Coming Soon)</span>
+                  </a>
+              </span>
+              <!-- Code Link. -->
+              <span class="link-block">
+                <a href=""
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <i class="fab fa-github"></i>
+                  </span>
+                  <span>Code (Coming Soon)</span>
+                  </a>
+              </span>
+              <!-- Dataset Link. -->
+              <span class="link-block">
+                <a href=""
+                   class="external-link button is-normal is-rounded is-dark">
+                  <span class="icon">
+                      <!-- <i class="far fa-images"></i> -->
+                      <p style="font-size:18px">📊</p>
+                  </span>
+                  <span>Dataset (Coming Soon)</span>
+                </a>
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+
+
+<section class="hero is-light is-small">
+  <div class="hero-body has-text-centered">
+    <h1 class="title is-1 mathvista_other">Abstract</h1>
+  </div>
+</section>
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Abstract. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <div class="content has-text-justified">
+          <p>
+            Existing multimodal large language models for long-video understanding predominantly rely on uniform sampling and single-turn inference, limiting their ability to identify sparse yet critical evidence amid extensive redundancy. We introduce Video-o3, a novel framework that supports iterative discovery of salient visual clues, fine-grained inspection of key segments, and adaptive termination once sufficient evidence is acquired. Technically, we address two core challenges in interleaved tool invocation. First, to mitigate attention dispersion induced by the heterogeneity of reasoning and tool-calling, we propose Task-Decoupled Attention Masking, which isolates per-step concentration while preserving shared global context. Second, to control context length growth in multi-turn interactions, we introduce a Verifiable Trajectory-Guided Reward that balances exploration coverage with reasoning efficiency. To support training at scale, we further develop a data synthesis pipeline and construct Seeker-173K, comprising 173K high-quality tool-interaction trajectories for effective supervised and reinforcement learning. Extensive experiments show that Video-o3 substantially outperforms state-of-the-art methods, achieving 72.1% accuracy on MLVU and 46.5% on Video-Holmes. These results demonstrate Video-o3's strong multi-hop evidence-seeking and reasoning capabilities, and validate the effectiveness of native tool invocation in long-video scenarios.
+          </p>
+        </div>
+      </div>
+    </div>
+    <!--/ Abstract. -->
+  </div>
+</section>
+
+<section class="hero is-light is-small">
+  <div class="hero-body has-text-centered">
+    <h1 class="title is-1 mathvista_other">Motivation: Thinking with Videos</h1>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Motivation. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <div class="content has-text-justified">
+          <p>
+            Current Multimodal Large Language Models (MLLMs) struggle with long videos because they typically rely on uniform frame sampling and single-turn inference. This approach often dilutes critical visual evidence within redundant background content.
+          </p>
+          <p>
+            Video-o3 introduces a paradigm shift by mimicking human behavior. Instead of watching a video passively, it actively explores the content. The model iteratively discovers salient visual clues, inspects key segments with fine-grained detail, and adaptively terminates the search once sufficient evidence is acquired.
+          </p>
+        </div>
+        <div class="content has-text-centered">
+          <img src="Homepage/images/Figure1.png" alt="Overview of Video-o3" width="100%"/>
+          <p style="text-align: center; font-style: italic;">Overview of Video-o3. Guided by the user query, the model actively identifies and localizes critical visual clues using native interleaved tool invocation. It autonomously decides whether to continue searching or to conclude the reasoning process.</p>
+        </div>
+        <div class="content has-text-justified">
+          <p>
+            <b>Key Features:</b>
+          </p>
+          <ul>
+            <li><b>Goal-Driven Exploration:</b> Unlike models that scan the whole video coarsely, Video-o3 starts with a coarse scan and iteratively focuses on informative segments.</li>
+            <li><b>Native Interleaved Tool Use:</b> The model supports "clue seeking" and "answer reasoning" within a single shared context, rather than decoupled modules.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <!--/ Motivation. -->
+  </div>
+</section>
+
+<section class="hero is-light is-small">
+  <div class="hero-body has-text-centered">
+    <h1 class="title is-1 mathvista_other">Method: Native Interleaved Tool Invocation</h1>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Methodology. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <div class="content has-text-justified">
+          <p>
+            Video-o3 is designed to solve the challenges of attention dispersion and contextual efficiency in long-video processing. The framework operates on a Think-and-Tool cycle. The model generates structured directives containing temporal windows and visual token quotas. It dynamically invokes the VideoCrop tool to inspect target segments with adaptive spatiotemporal resolution.
+          </p>
+        </div>
+        <div class="content has-text-centered">
+          <img src="Homepage/images/Figure3.png" alt="Architectural Overview" width="100%"/>
+          <p style="text-align: center; font-style: italic;">Architectural Overview. Video-o3 dynamically executes tool invocations based on previous reasoning to scrutinize specific clue segments. The Vision Encoder uses adaptive flexible sampling, while the LLM Decoder manages the interleaved "Think," "Tool," and "Answer" tokens.</p>
+        </div>
+        <div class="content has-text-justified">
+          <p>
+            <b>Core Technical Innovations:</b>
+          </p>
+          <ul>
+            <li><b>Task-Decoupled Attention Masking:</b> To prevent attention dispersion, TDAM isolates per-step concentration. During clue seeking, the model attends only to the global context; during answering, it focuses on high-resolution tool observations.</li>
+            <li><b>Verifiable Trajectory-Guided Reward:</b> To control context length and cost, we introduce a reward mechanism that balances exploration coverage with reasoning efficiency, encouraging the model to terminate precisely when evidence is sufficient.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <!--/ Methodology. -->
+  </div>
+</section>
+
+<section class="hero is-light is-small">
+  <div class="hero-body has-text-centered">
+    <h1 class="title is-1 mathvista_other">Data Construction: Pipeline and Seeker-173K</h1>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-desktop">
+    <!-- Data Construction. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-four-fifths">
+        <div class="content has-text-justified">
+          <p>
+            Training a model to perform native interleaved tool invocation requires high-quality exploration trajectories, which are scarce in existing datasets. To address this, we developed a scalable automated data synthesis pipeline.
+          </p>
+        </div>
+        <div class="content has-text-centered">
+          <img src="Homepage/images/Figure5.png" alt="The Data Construction Pipeline" width="100%"/>
+          <p style="text-align: center; font-style: italic;">The Data Construction Pipeline. We transform "Video-Question-Answer" triplets into explicit tool exploration trajectories via a four-stage process: Clue Localization, Validity Verification, Trajectory Generation, and Logical Consistency Checks.</p>
+        </div>
+        <div class="content has-text-justified">
+          <p>
+            <b>About Seeker-173K:</b>
+          </p>
+          <ul>
+            <li><b>Structure:</b> The dataset is stratified into a four-quadrant taxonomy based on evidence cardinality and visual saliency, covering tasks from "Single-Clue Direct Answering" to complex "Multi-Clue Tool Invocation".</li>
+            <li><b>Quality:</b> Human verification is enforced through random sampling in all stages. The pipeline rigorously filters out flawed instances, preserving only those with sound logic and factual visual evidence. </li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <!--/ Data Construction. -->
+  </div>
+</section>
+
+<section class="hero is-light is-small">
+  <div class="hero-body has-text-centered">
+    <h1 class="title is-1 mathvista_other">Performance</h1>
+  </div>
+</section>
+
+<section class="section">
+  <div class="container is-max-widescreen">
+    <!-- Performance. -->
+    <div class="columns is-centered has-text-centered">
+      <div class="column is-full">
+        <div class="content has-text-centered">
+          <div class="table-container">
+            <table class="table is-bordered is-striped is-hoverable is-fullwidth" style="font-size: 0.9em;">
+              <thead>
+                <tr>
+                  <th rowspan="2" style="vertical-align: middle; min-width: 150px;">Methods</th>
+                  <th rowspan="2" style="vertical-align: middle;">Sizes</th>
+                  <th>VideoMME</th>
+                  <th>MLVU</th>
+                  <th>LVBench</th>
+                  <th>LongVideoBench</th>
+                  <th>VideoMMMU</th>
+                  <th>MMVU</th>
+                  <th>Video-Holmes</th>
+                </tr>
+                <tr>
+                  <th>Avg</th>
+                  <th>M-Avg</th>
+                  <th>Avg</th>
+                  <th>Avg</th>
+                  <th>Overall</th>
+                  <th>M-Avg</th>
+                  <th>Avg</th>
+                </tr>
+              </thead>
+              <tbody>
+                <!-- Open-source Single-Turn Video MLLMs -->
+                <tr>
+                  <td colspan="9" style="text-align: left; background-color: #f5f5f5;"><i>Open-source Single-Turn Video MLLMs</i></td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Qwen2.5-VL</td>
+                  <td>7B</td>
+                  <td>65.1</td>
+                  <td>70.2</td>
+                  <td>45.3</td>
+                  <td>56.0</td>
+                  <td>47.4</td>
+                  <td>61.3</td>
+                  <td>34.7</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">LLaVA-Video</td>
+                  <td>7B</td>
+                  <td>63.3</td>
+                  <td>70.8</td>
+                  <td>-</td>
+                  <td>58.2</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Video-R1</td>
+                  <td>7B</td>
+                  <td>61.4</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>52.4</td>
+                  <td>63.8</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Rewatch-R1</td>
+                  <td>7B</td>
+                  <td>65.6</td>
+                  <td>-</td>
+                  <td>43.3</td>
+                  <td>-</td>
+                  <td>51.9</td>
+                  <td>-</td>
+                  <td>44.3</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Video-Thinker</td>
+                  <td>7B</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>37.0</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>43.2</td>
+                </tr>
+                <!-- Open-source Decoupled Iterative Reasoning Video MLLMs -->
+                <tr>
+                  <td colspan="9" style="text-align: left; background-color: #f5f5f5;"><i>Open-source Decoupled Iterative Reasoning Video MLLMs</i></td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Video-RTS</td>
+                  <td>7B</td>
+                  <td>63.0</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>56.6</td>
+                  <td>52.7</td>
+                  <td>66.4</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Video-MTR</td>
+                  <td>7B</td>
+                  <td>59.0</td>
+                  <td>59.7</td>
+                  <td>38.6</td>
+                  <td>56.4</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">LOVE-R1</td>
+                  <td>7B</td>
+                  <td>66.2</td>
+                  <td>67.4</td>
+                  <td>48.2</td>
+                  <td>60.1</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <!-- Open-source Native Multi-turn Tool Invocation Video MLLMs -->
+                <tr>
+                  <td colspan="9" style="text-align: left; background-color: #f5f5f5;"><i>Open-source Native Multi-turn Tool Invocation Video MLLMs</i></td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Conan</td>
+                  <td>7B</td>
+                  <td>60.5</td>
+                  <td>63.4</td>
+                  <td>39.2</td>
+                  <td>56.6</td>
+                  <td>-</td>
+                  <td>-</td>
+                  <td>44.6</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">LongVT</td>
+                  <td>7B</td>
+                  <td>64.3</td>
+                  <td>-</td>
+                  <td>41.3</td>
+                  <td>-</td>
+                  <td>45.4</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr>
+                  <td style="text-align: left; white-space: nowrap;">Video-Zoomer</td>
+                  <td>7B</td>
+                  <td>65.2</td>
+                  <td>-</td>
+                  <td>41.5</td>
+                  <td>57.7</td>
+                  <td>52.2</td>
+                  <td>-</td>
+                  <td>-</td>
+                </tr>
+                <tr style="background-color: #D9F5FF;">
+                  <td style="text-align: left; white-space: nowrap;"><b>Video-o3 (RL)</b></td>
+                  <td><b>7B</b></td>
+                  <td><b>66.1</b></td>
+                  <td><b>71.9</b></td>
+                  <td><b>47.5</b></td>
+                  <td><b>59.3</b></td>
+                  <td><b>50.0</b></td>
+                  <td><b>66.9</b></td>
+                  <td><b>46.1</b></td>
+                </tr>
+                <tr style="background-color: #D9F5FF;">
+                  <td style="text-align: left; white-space: nowrap;"><b>Video-o3 (SFT+RL)</b></td>
+                  <td><b>7B</b></td>
+                  <td><b>66.5</b></td>
+                  <td><b>72.1</b></td>
+                  <td><b>47.6</b></td>
+                  <td><b>60.5</b></td>
+                  <td><b>51.7</b></td>
+                  <td><b>67.2</b></td>
+                  <td><b>46.5</b></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+          <p style="text-align: justified; margin-top: 10px;">
+            <b>Comparison of our method with existing approaches on video question answering tasks across various benchmarks.</b> Video-o3 significantly outperforms previous methods in long video understanding benchmarks while also demonstrating strong performance in multiple video inference benchmarks.
+          </p>
+        </div>
+      </div>
+    </div>
+    <!--/ Performance. -->
+
+<script>
+  document.addEventListener("DOMContentLoaded", function() {
+    updateRowNumbers();
+    document.querySelector("#results").addEventListener("click", updateRowNumbers);
+  });
+
+  function updateRowNumbers() {
+    const rows = document.querySelectorAll("#results tbody tr");
+    rows.forEach((row, index) => {
+      row.querySelector("td").innerText = index + 1;
+    });
+  }
+</script>
+
+  </div>
+</section>
+<section class="hero is-light is-small">
+  <div class="hero-body has-text-centered">
+    <h1 class="title is-1 mathvista_other" id="citation">Citation</h1>
+  </div>
+</section>
+
+<section class="section" id="BibTeX">
+  <div class="container is-max-desktop content">
+    <pre><code>@article{zeng2026video,
+  title={Video-o3: Native Interleaved Clue Seeking for Long Video Multi-Hop Reasoning},
+  author={Zeng, Xiangyu and Zhang, Zhiqiu and Zhu, Yuhan and Li, Xinhao and Wang, Zikang and Ma, Changlian and Zhang, Qingyu and Huang, Zizheng and Ouyang, Kun and Jiang, Tianxiang and others},
+  journal={arXiv preprint arXiv:2601.23224},
+  year={2026}
+}</code></pre>
+  </div>
+</section>
+
+
+<section class="section">
+  <div class="container" style="width: 60%;">
+  <style>
+      pre {
+        background-color: #f4f4f4;
+        padding: 5px; /* 调整padding为5px */
+        border: 1px solid #ddd;
+        border-radius: 5px;
+        overflow-x: auto; /* 允许水平滚动 */
+    }
+    code {
+        font-family: Consolas, "Courier New", monospace;
+        color: #d63384; /* 代码文本颜色 */
+    }
+  </style>
+
+
+  </div>
+</section>
+
+
+<footer class="footer">
+  <!-- <div class="container"> -->
+    <div class="content has-text-centered">
+    </div>
+    <div class="columns is-centered">
+      <div class="column is-8">
+        <div class="content">
+          <p style="text-align: center;">
+            This website is adapted from <a href="https://video-mme.github.io/">Video-MME</a>, licensed under a <a rel="license"
+                                                href="http://creativecommons.org/licenses/by-sa/4.0/">Creative
+            Commons Attribution-ShareAlike 4.0 International License</a>.
+          </p>
+        </div>
+      </div>
+    </div>
+  <!-- </div> -->
+</footer>
+
+</body>
+</html>
+
