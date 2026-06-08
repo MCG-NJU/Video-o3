@@ -28,6 +28,8 @@
 - [x] **2026/02/15**: 🔥🔥🔥Release the evaluation code for Video-o3.
 - [x] **2026/02/10**: 🔥🔥🔥Release the checkpoint of **[Video-o3 (RL)](https://huggingface.co/collections/MCG-NJU/video-o3)** and **[Video-o3 (SFT+RL)](https://huggingface.co/collections/MCG-NJU/video-o3)**.
 - [x] **2026/02/10**: 🔥🔥🔥Release **[Seeker-173K](https://huggingface.co/datasets/MCG-NJU/Seeker-173K)**, a large-scale dataset comprising 173K high-quality tool-interaction trajectories for effective supervised and reinforcement learning.
+
+> **Video Files in Seeker-173K**: The dataset contains video metadata and annotations. The raw video files can be downloaded from their original sources (e.g., YouTube, ActivityNet, etc.) using the video IDs provided in the dataset. Please refer to the [Seeker-173K dataset card](https://huggingface.co/datasets/MCG-NJU/Seeker-173K) for detailed instructions on downloading the corresponding video files.
 - [x] **2026/01/30**: 🔥🔥🔥Release the paper of **[Video-o3](https://arxiv.org/abs/2601.23224)**, a novel framework that supports native interleaved clue seeking for long video multi-hop reasoning.
 
 ## 📑 Todo List
