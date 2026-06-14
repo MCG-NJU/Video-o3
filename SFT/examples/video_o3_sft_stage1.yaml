@@ -23,7 +23,7 @@ deepspeed: examples/deepspeed/ds_z1_config.json
 
 ### dataset
 dataset: sft_data_stage1
-template: qwen2_vl
+template: qwen2_vl # qwen3_vl_nothink for qwen3vl
 cutoff_len: 40000
 overwrite_cache: false
 preprocessing_batch_size: 128

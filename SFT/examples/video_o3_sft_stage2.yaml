@@ -7,13 +7,14 @@ video_maxlen: 768
 min_token_number: 1024
 max_token_number: 16384
 trust_remote_code: true
+# TDAM
 mask_answer_from_first_video: True
 mask_grounding_from_other_videos: True
 mask_ratio: 0.1
 
 # optional
 # 4d mask 不支持flash-attn
-enable_liger_kernel: True
+# enable_liger_kernel: True
 
 ### method
 stage: sft
@@ -26,7 +27,7 @@ deepspeed: examples/deepspeed/ds_z1_config.json
 
 ### dataset
 dataset: sft_data_stage2
-template: qwen2_vl
+template: qwen2_vl # qwen3_vl_nothink for qwen3vl
 cutoff_len: 40000
 overwrite_cache: false
 preprocessing_batch_size: 128

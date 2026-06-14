@@ -4,17 +4,36 @@ import torch
 import numpy as np
 from my_qwen_vl_utils.vision_process import crop_video_raw, fetch_video_raw_frame, resample_video_from_raw
 
-def crop_video(raw_video, raw_fps, temporal_segment, sampling_strategy, frames_sample_fps=2.0):
+# Qwen2.5-VL patch_size=14 -> 28*28; Qwen3-VL patch_size=16 -> 32*32
+def _pixels_per_token(patch_size: int) -> int:
+    return (patch_size * 2) ** 2
 
+
+def crop_video(
+    raw_video,
+    raw_fps,
+    temporal_segment,
+    sampling_strategy,
+    frames_sample_fps=2.0,
+    patch_size: int = 16,
+    *,
+    min_tokens: int = 512,
+    max_tokens_coarse: int = 2048,
+    max_tokens_medium: int = 4096,
+    max_tokens_fine: int = 6144,
+    max_tokens_per_frame_cap: int = 768,
+):
+    """Crop and resample video segment. Token limits can be overridden via kwargs (e.g. from rollout.crop_* config)."""
     video_path, raw_video_tensor = raw_video['path'], raw_video['tensor']
     clip_start, clip_end = temporal_segment
-    min_tokens = 512
     if sampling_strategy == "coarse":
-        max_tokens = 2048
+        max_tokens = max_tokens_coarse
     elif sampling_strategy == "medium":
-        max_tokens = 4096
+        max_tokens = max_tokens_medium
     elif sampling_strategy == "fine":
-        max_tokens = 6144
+        max_tokens = max_tokens_fine
+    else:
+        max_tokens = max_tokens_medium
 
     if video_path.endswith(".mp4"):
         crop_video_ele = {
@@ -35,15 +54,15 @@ def crop_video(raw_video, raw_fps, temporal_segment, sampling_strategy, frames_s
         }
         raw_video_crop, raw_video_crop_fps = fetch_video_raw_frame(crop_video_ele)
 
-    # resize
-    frames_num=raw_video_crop.shape[0]
-    max_tokens_per_frame = max_tokens // (frames_num//2)
-    max_tokens_per_frame = min(max_tokens_per_frame, 768)
-    min_tokens_per_frame = min_tokens // (frames_num//2)
-    # Create video element dict for resample_video_from_raw
+    # resize: pixels per token = (patch_size*2)**2
+    pixels_per_token = _pixels_per_token(patch_size)
+    frames_num = raw_video_crop.shape[0]
+    max_tokens_per_frame = max_tokens // (frames_num // 2)
+    max_tokens_per_frame = min(max_tokens_per_frame, max_tokens_per_frame_cap)
+    min_tokens_per_frame = min_tokens // (frames_num // 2)
     resample_ele = {
-        "max_pixels": max_tokens_per_frame * 28 * 28,
-        "min_pixels": min_tokens_per_frame * 28 * 28,
+        "max_pixels": max_tokens_per_frame * pixels_per_token,
+        "min_pixels": min_tokens_per_frame * pixels_per_token,
     }
     # Resample and resize video
     video_crop, video_crop_fps = resample_video_from_raw(

@@ -138,6 +138,24 @@ def process_video(video_path, num_frames, min_pixels, max_pixels):
     return images
 
 
+def count_video_pad_tokens(processor, input_ids):
+    """Count <|video_pad|> placeholder tokens in input_ids (Qwen2.5-VL / Qwen3-VL)."""
+    tok = processor.tokenizer
+    vid = getattr(tok, 'video_token_id', None)
+    if vid is None:
+        token_str = getattr(tok, 'video_token', None) or '<|video_pad|>'
+        try:
+            vid = tok.convert_tokens_to_ids(token_str)
+        except Exception:
+            return 0
+        if isinstance(vid, list):
+            vid = vid[0] if vid else None
+    if vid is None:
+        return 0
+    row = input_ids[0]
+    return int((row == vid).sum().item())
+
+
 class KeywordsStoppingCriteria(StoppingCriteria):
     def __init__(self, keywords, tokenizer, input_ids):
         self.keywords = keywords
@@ -307,6 +325,8 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
         max_turn: int=8,
         use_dynamic_quota: bool = False,
         do_sample: bool = False,
+        is_qwen3vl: bool = False,
+        crop_quota=(2048, 4096, 6144),
         **kwargs,
     ):
         super().__init__(use_custom_prompt=use_custom_prompt)
@@ -340,6 +360,8 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
         self.use_tools = use_tools
         self.use_dynamic_quota = use_dynamic_quota
         self.do_sample = do_sample
+        self.is_qwen3vl = is_qwen3vl
+        self.crop_quota = crop_quota
 
 
         print("**************************************************")
@@ -347,6 +369,8 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
         print(f"model_path: {model_path}")
         print(f"use_tools: {use_tools}")
         print(f"use_dynamic_quota: {use_dynamic_quota}")
+        print(f"is_qwen3vl: {is_qwen3vl}")
+        print(f"crop_quota: {crop_quota}")
         print(f"do_sample: {do_sample}")
         print(f"max_turn: {max_turn}")
         print(f"min_pixels: {min_pixels}")
@@ -367,9 +391,16 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
         self.max_turn = max_turn
         self.past_key_values = None
 
-        from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
-        MODEL_CLS = Qwen2_5_VLForConditionalGeneration
-        self.processor = AutoProcessor.from_pretrained(model_path)
+        if self.is_qwen3vl:
+            from transformers import AutoProcessor, AutoModelForImageTextToText
+            MODEL_CLS = AutoModelForImageTextToText
+            self.processor = AutoProcessor.from_pretrained(model_path, local_files_only=True)
+            self.patch_size = 16
+        else:
+            from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+            MODEL_CLS = Qwen2_5_VLForConditionalGeneration
+            self.processor = AutoProcessor.from_pretrained(model_path)
+            self.patch_size = 14
 
         gpu_mems = get_gpu_memory()
         max_gpu_mem = max(gpu_mems) if gpu_mems != [] else -1
@@ -419,10 +450,16 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
             torch.cuda.set_device(0)
             self.device = 'cuda'
         else:
-            self.model = MODEL_CLS.from_pretrained(
-                model_path, torch_dtype=torch.bfloat16, device_map="auto", 
-                attn_implementation='sdpa'
+            load_kwargs = dict(
+                torch_dtype=torch.bfloat16,
+                device_map="auto",
             )
+            if self.is_qwen3vl:
+                load_kwargs['attn_implementation'] = 'flash_attention_2'
+                load_kwargs['local_files_only'] = True
+            else:
+                load_kwargs['attn_implementation'] = 'sdpa'
+            self.model = MODEL_CLS.from_pretrained(model_path, **load_kwargs)
             self.model.eval()
 
         torch.cuda.empty_cache()
@@ -465,35 +502,24 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
                     item['max_pixels'] = self.max_pixels
                 if self.total_pixels is not None:
                     if item['video_start'] is not None and item['video_end'] is not None:
+                        pixel_unit = self.patch_size * self.patch_size * 4
+                        
                         if not self.use_dynamic_quota:
-                            item['total_pixels'] = 4096 * 28 * 28
+                            item['total_pixels'] = self.crop_quota[1] * pixel_unit
                         else:
                             if item['sampling_strategy'] == "coarse":
-                                item['total_pixels'] = 2048 * 28 * 28
+                                item['total_pixels'] = self.crop_quota[0] * pixel_unit
                             elif item['sampling_strategy'] == "medium":
-                                item['total_pixels'] = 4096 * 28 * 28
+                                item['total_pixels'] = self.crop_quota[1] * pixel_unit
                             elif item['sampling_strategy'] == "fine":
-                                item['total_pixels'] = 6144 * 28 * 28
-                        
+                                item['total_pixels'] = self.crop_quota[2] * pixel_unit
                     else:
                         item['total_pixels'] = self.total_pixels
 
                     print(f"sampling strategy: {item['sampling_strategy']}, total pixels: {item['total_pixels']}")
-                        
-                if self.fps is not None:
-                    item['fps'] = self.fps
-                elif self.nframe is not None:
-                    import cv2
-                    video = cv2.VideoCapture(s['value'])
-                    frame_count = int(video.get(cv2.CAP_PROP_FRAME_COUNT))
-                    video.release()
-                    if frame_count < self.nframe:
-                        new_frame_count = frame_count // self.FRAME_FACTOR * self.FRAME_FACTOR
-                        print(f"use {new_frame_count} for {s['value']}")
-                        item['nframes'] = new_frame_count
-                    else:
-                        item['nframes'] = self.nframe
-                for key in ['min_pixels', 'max_pixels', 'total_pixels']:
+
+            
+                for key in ['min_pixels', 'max_pixels', 'total_pixels','sample_fps']:
                     if key in s and s[key] is not None:
                         item[key] = s[key]
 
@@ -590,9 +616,12 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
                 raise err
         else:
             try:
-                from .vision_process import process_vision_info
+                if self.is_qwen3vl:
+                    from .vision_process_qwen3vl import process_vision_info
+                else:
+                    from .vision_process import process_vision_info
             except Exception as err:
-                logging.critical("qwen_vl_utils not found, please install it via 'pip install qwen-vl-utils'")  # noqa: E501
+                logging.critical("vision_process not found, please check vlmeval/vlm/video_o3/vision_process.py")  # noqa: E501
                 raise err
 
         # Scan and extract raw_video, question_type
@@ -632,9 +661,24 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
 
         total_inference_time = 0.0
         total_generate_time = 0.0
+        total_video_pad_tokens_qa = 0
+        total_generate_tokens_qa = 0
         inference_start_time = time.time()
 
-        images, videos = process_vision_info([messages])
+        video_metadatas = None
+        video_kwargs = None
+        if self.is_qwen3vl:
+            images, videos, video_kwargs = process_vision_info(
+                [messages],
+                image_patch_size=16,
+                return_video_kwargs=True,
+                return_video_metadata=True,
+            )
+            if videos is not None:
+                videos, video_metadatas = zip(*videos)
+                videos, video_metadatas = list(videos), list(video_metadatas)
+        else:
+            images, videos = process_vision_info([messages])
 
         while True:
 
@@ -642,8 +686,20 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
 
             text = self.processor.apply_chat_template([messages], tokenize=False, add_generation_prompt=True,chat_template=CHAT_TEMPLATE)
 
-            inputs = self.processor(text=text, images=images, videos=videos, padding=True, return_tensors='pt')  # noqa: E501
+            if self.is_qwen3vl:
+                inputs = self.processor(
+                    text=text,
+                    images=images,
+                    videos=videos,
+                    video_metadata=video_metadatas,
+                    do_resize=False,
+                    return_tensors='pt',
+                    **(video_kwargs or {}),
+                )
+            else:
+                inputs = self.processor(text=text, images=images, videos=videos, padding=True, return_tensors='pt')  # noqa: E501
             inputs = inputs.to('cuda')
+            total_video_pad_tokens_qa = count_video_pad_tokens(self.processor, inputs.input_ids)
 
             if listinstr(['omni'], self.model_path.lower()):
                 self.generate_kwargs['use_audio_in_video'] = self.use_audio_in_video
@@ -677,6 +733,7 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
             generated_ids = [
                 output_ids[len(input_ids):] for input_ids, output_ids in zip(generation_inputs['input_ids'], generated_ids)
             ]
+            total_generate_tokens_qa += int(len(generated_ids[0]))
             
             response = self.processor.tokenizer.decode(
                 generated_ids[0], skip_special_tokens=True, clean_up_tokenization_spaces=False
@@ -764,10 +821,21 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
 
                         
                         temp_messages = [{'role':"user", 'content': self._prepare_content(temp_message, dataset=dataset)}]
-                        temp_images, temp_videos, temp_video_kwargs = process_vision_info(temp_messages, return_video_kwargs=True)
-
-                        sample_fps = temp_video_kwargs['fps'][0]
-                        sample_n_frames = temp_video_kwargs['n_frames'][0]
+                        if self.is_qwen3vl:
+                            temp_images, temp_videos, temp_video_kwargs = process_vision_info(
+                                temp_messages,
+                                image_patch_size=16,
+                                return_video_kwargs=True,
+                                return_video_metadata=True,
+                            )
+                            temp_video_tensors = [v for v, _ in temp_videos]
+                            temp_metadatas = [m for _, m in temp_videos]
+                            sample_fps = temp_video_kwargs['fps'][0]
+                            sample_n_frames = temp_video_kwargs['n_frames'][0]
+                        else:
+                            temp_images, temp_videos, temp_video_kwargs = process_vision_info(temp_messages, return_video_kwargs=True)
+                            sample_fps = temp_video_kwargs['fps'][0]
+                            sample_n_frames = temp_video_kwargs['n_frames'][0]
                         
                         if temp_images is not None:
                             if images is None:
@@ -776,7 +844,13 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
                         if temp_videos is not None:
                             if videos is None:
                                 videos = []
-                            videos.extend(temp_videos)
+                            if self.is_qwen3vl:
+                                videos.extend(temp_video_tensors)
+                                if video_metadatas is None:
+                                    video_metadatas = []
+                                video_metadatas.extend(temp_metadatas)
+                            else:
+                                videos.extend(temp_videos)
 
                         new_message = []
 
@@ -849,6 +923,8 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
         print(f"Total turns used: {turn_count}")
         print(f"Total inference time: {total_inference_time:.2f} seconds")
         print(f"Total generate time (sum of all rounds): {total_generate_time:.2f} seconds")
+        print(f"Video <|video_pad|> tokens in the whole conversation: {total_video_pad_tokens_qa}")
+        print(f"Total generate tokens (sum over rounds): {total_generate_tokens_qa}")
 
         # Append turn and timing info at end of response for later analysis
         response_with_metadata = f"{response}\n[TURN_COUNT: {turn_count}]\n[INFERENCE_TIME: {total_inference_time:.2f}s]\n[INFERENCE_TIME_GENERATE: {total_generate_time:.2f}s]"
@@ -865,7 +941,10 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
                 raise err
         else:
             try:
-                from qwen_vl_utils import process_vision_info
+                if self.is_qwen3vl:
+                    from .vision_process_qwen3vl import process_vision_info
+                else:
+                    from qwen_vl_utils import process_vision_info
             except Exception as err:
                 logging.critical("qwen_vl_utils not found, please install it via 'pip install qwen-vl-utils'")  # noqa: E501
                 raise err
@@ -884,6 +963,26 @@ class VideoO3Chat(VideoO3PromptMixin, BaseModel):
         if listinstr(['omni'], self.model_path.lower()):
             audios, images, videos = process_mm_info([messages], use_audio_in_video=self.use_audio_in_video)
             inputs = self.processor(text=text, images=images,audio=audios, videos=videos, padding=True, return_tensors='pt',use_audio_in_video=self.use_audio_in_video)  # noqa: E501
+        elif self.is_qwen3vl:
+            images, videos, video_kwargs = process_vision_info(
+                [messages],
+                image_patch_size=16,
+                return_video_kwargs=True,
+                return_video_metadata=True,
+            )
+            video_metadatas = None
+            if videos is not None:
+                videos, video_metadatas = zip(*videos)
+                videos, video_metadatas = list(videos), list(video_metadatas)
+            inputs = self.processor(
+                text=text,
+                images=images,
+                videos=videos,
+                video_metadata=video_metadatas,
+                do_resize=False,
+                return_tensors='pt',
+                **(video_kwargs or {}),
+            )
         else:
             images, videos = process_vision_info([messages])
             inputs = self.processor(text=text, images=images, videos=videos, padding=True, return_tensors='pt')  # noqa: E501

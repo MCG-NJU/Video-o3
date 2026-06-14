@@ -80,7 +80,13 @@ def collate_fn(data_list: list[dict]) -> dict:
 
     return {**tensors, **non_tensors}
 
-def process_image(image: dict, max_pixels: int = 2048 * 2048, min_pixels: int = 512 * 512, return_original_image=False):
+def process_image(
+    image: dict,
+    max_pixels: int = 2048 * 2048,
+    min_pixels: int = 512 * 512,
+    return_original_image: bool = False,
+    patch_size: int = 14,
+):
     from io import BytesIO
     from PIL import Image
 
@@ -109,7 +115,10 @@ def process_image(image: dict, max_pixels: int = 2048 * 2048, min_pixels: int = 
         width, height = int(image.width * resize_factor), int(image.height * resize_factor)
         image = image.resize((width, height), resample=Image.Resampling.LANCZOS)
 
-    assert image.width >= 28 and image.height >= 28, "Qwen image size should be larger than 28 * 28."
+    min_side = patch_size * 2  # Qwen2.5-VL 14->28, Qwen3-VL 16->32
+    assert image.width >= min_side and image.height >= min_side, (
+        f"Qwen image size should be at least {min_side} (patch_size={patch_size}, grid={min_side})."
+    )
 
     if image.mode != 'RGB':
         image = image.convert('RGB')
@@ -137,6 +146,7 @@ class MultiModalDatasetImage(Dataset):
                  system_prompt: str = None,
                  max_pixels: int = 2048 * 2048,
                  min_pixels: int = 512 * 512,
+                 patch_size: int = 14,
                  mask_blank: bool = False,
                  use_3drope: bool = True,
                  general_qa_reward_fn: str = 'v1',
@@ -169,7 +179,8 @@ class MultiModalDatasetImage(Dataset):
         self.system_prompt = system_prompt
         self.max_pixels = max_pixels
         self.min_pixels = min_pixels
-        
+        self.patch_size = patch_size
+
         self.mask_blank = mask_blank
         self.use_3drope = use_3drope
         self.general_qa_reward_fn = general_qa_reward_fn
@@ -232,7 +243,7 @@ class MultiModalDatasetImage(Dataset):
             images = row_dict[self.image_key]
             raw_prompt = prompt_with_chat_template.replace('<image>', '<|vision_start|><|image_pad|><|vision_end|>')
             try:
-                row_dict['multi_modal_data'] = {'image': [process_image(image, self.max_pixels, self.min_pixels) for image in row_dict[self.image_key]]}
+                row_dict['multi_modal_data'] = {'image': [process_image(image, self.max_pixels, self.min_pixels, patch_size=self.patch_size) for image in row_dict[self.image_key]]}
             except Exception as e:
                 print(str(e))
                 return self.__getitem__(item+1) if item + 1 < len(self) else self.__getitem__(0)
@@ -279,7 +290,7 @@ class MultiModalDatasetImage(Dataset):
                 return self.__getitem__(item+1) if item + 1 < len(self) else self.__getitem__(0)
 
         if self.use_3drope and self.image_key in row_dict:
-            from verl.models.transformers.qwen2_vl import get_rope_index
+            from verl.models.transformers.rope_utils import get_rope_index
             position_ids = [
                 get_rope_index(
                     self.processor,

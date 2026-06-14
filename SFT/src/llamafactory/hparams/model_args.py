@@ -366,6 +366,14 @@ class ProcessorArguments:
         default=16384,
         metadata={"help": "The maximum number of tokens for video inputs."},
     )
+    patch_size: int = field(
+        default=None,
+        metadata={"help": "The patch size for video inputs."},
+    )
+    nframes: Optional[int] = field(
+        default=None,
+        metadata={"help": "The number of frames to sample for video inputs."},
+    )
     video_fps: float = field(
         default=2.0,
         metadata={"help": "The frames to sample per second for video inputs."},

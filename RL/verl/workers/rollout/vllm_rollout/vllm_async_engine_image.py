@@ -26,7 +26,7 @@ from verl import DataProto
 from verl.utils.fs import copy_to_local
 from verl.utils.model import compute_position_id_with_mask
 from verl.utils.torch_functional import pad_sequence_to_length, get_eos_mask, get_final_eos_mask, pad_2d_list_to_length
-from verl.models.transformers.qwen2_vl import get_rope_index
+from verl.models.transformers.rope_utils import get_rope_index
 from verl.workers.rollout.vllm_rollout.schemas import (
     AsyncRolloutRequest,
     AsyncRolloutRequestStateEnum,

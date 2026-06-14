@@ -221,7 +221,7 @@ class RLHFDataset(Dataset):
                                                                          truncation=self.truncation)
 
         if self.image_key in row_dict:
-            from verl.models.transformers.qwen2_vl import get_rope_index
+            from verl.models.transformers.rope_utils import get_rope_index
 
             position_ids = [
                 get_rope_index(

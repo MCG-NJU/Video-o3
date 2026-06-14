@@ -38,6 +38,17 @@ video_o3_series = {
         use_tools=True,
         use_dynamic_quota=True,
     ),
+    # Qwen3-VL backbone (Video-O3 trained on Qwen3-VL)
+    "video-o3-qwen3vl": partial(
+        VideoO3Chat,
+        model_path="path-of-ckpt",
+        min_pixels=20 * 32 * 32,
+        max_pixels=768 * 32 * 32,
+        total_pixels=16384 * 32 * 32,
+        use_tools=True,
+        use_dynamic_quota=True,
+        is_qwen3vl=True,
+    ),
     # For Charades (temporal grounding)
     "video-o3-rl-tg": partial(
         Qwen2VLChat,

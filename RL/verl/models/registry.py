@@ -19,7 +19,7 @@ import torch.nn as nn
 
 # Supported models using HF Rmpad
 # TODO(sgm): HF may supported more than listed here, we should add more after testing
-_MODELS_SUPPORT_RMPAD = {'llama', 'mistral', 'gemma', 'qwen2', 'qwen2_vl', 'qwen2_5_vl'}
+_MODELS_SUPPORT_RMPAD = {'llama', 'mistral', 'gemma', 'qwen2', 'qwen2_vl', 'qwen2_5_vl', 'qwen3_vl', 'qwen3_vl_moe'}
 
 
 def check_model_support_rmpad(model_type: str):
@@ -37,6 +37,12 @@ def check_model_support_rmpad(model_type: str):
         Qwen2VLFlashAttention2.forward = ulysses_flash_attn_forward
         Qwen2_5_VLFlashAttention2.forward = ulysses_flash_attn_forward
         print("Qwen2vl patch applied!")
+
+    elif model_type in ("qwen3_vl", "qwen3_vl_moe"):
+        # Qwen3VL uses standard flash attention (no special mrope flash attn patch needed).
+        # The multimodal model.forward is handled by AutoModelForVision2Seq natively,
+        # and position_ids (3D mrope) are already handled in dp_actor.py.
+        print(f"Qwen3VL rmpad support enabled (model_type={model_type})")
 
 
 # Supported models in Megatron-LM

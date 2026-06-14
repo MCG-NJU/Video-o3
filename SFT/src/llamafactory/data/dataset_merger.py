@@ -31,6 +31,19 @@ if TYPE_CHECKING:
 logger = logging.get_logger(__name__)
 
 
+def needs_normalize(dataset, n: int = 10) -> bool:
+    r"""Check if any of the first n samples need normalization (missing 'sample' field in videos)."""
+    for i in range(min(n, len(dataset))):
+        example = dataset[i]
+        videos = example.get("videos")
+        if not isinstance(videos, list):
+            continue
+        for video_item in videos:
+            if isinstance(video_item, dict) and "sample" not in video_item:
+                return True
+    return False
+
+
 def normalize_videos_field(example: dict) -> dict:
     r"""
     Normalize the videos field by adding 'sample' field with value "old_quota" if missing.
@@ -142,13 +155,16 @@ def merge_tokenized_datasets(
             
             # Normalize videos field format (add 'sample' field if missing)
             for split_name in dataset.keys():
+                if not needs_normalize(dataset[split_name]):
+                    logger.info_rank0(f"Skipping normalization for {split_name} split (first 10 samples all have 'sample' field).")
+                    continue
                 logger.info_rank0(f"Normalizing videos field format in {split_name} split...")
                 dataset[split_name] = dataset[split_name].map(
-                    normalize_videos_field, 
+                    normalize_videos_field,
                     desc="Normalizing videos field",
-                    keep_in_memory=True,  # Keep in memory to avoid permission issues with temp files
-                    load_from_cache_file=False,  # Disable cache to avoid permission issues
-                    cache_file_name=None  # Don't create cache files
+                    keep_in_memory=True,
+                    load_from_cache_file=False,
+                    cache_file_name=None,
                 )
             
             # Apply sampling if requested
@@ -187,14 +203,17 @@ def merge_tokenized_datasets(
                 )
             
             # Normalize videos field format (add 'sample' field if missing)
-            logger.info_rank0(f"  Normalizing videos field format (adding 'sample' field if missing)...")
-            dataset = dataset.map(
-                normalize_videos_field, 
-                desc="Normalizing videos field",
-                keep_in_memory=True,  # Keep in memory to avoid permission issues with temp files
-                load_from_cache_file=False,  # Disable cache to avoid permission issues
-                cache_file_name=None  # Don't create cache files
-            )
+            if not needs_normalize(dataset):
+                logger.info_rank0(f"  Skipping normalization (first 10 samples all have 'sample' field).")
+            else:
+                logger.info_rank0(f"  Normalizing videos field format (adding 'sample' field if missing)...")
+                dataset = dataset.map(
+                    normalize_videos_field,
+                    desc="Normalizing videos field",
+                    keep_in_memory=True,
+                    load_from_cache_file=False,
+                    cache_file_name=None,
+                )
             
             # Apply sampling if sample_sizes is provided
             if sample_sizes is not None:

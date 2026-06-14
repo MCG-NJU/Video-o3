@@ -151,11 +151,11 @@ def compute_score(prompt: str, predict_str_list: list, ground_truth: list, extra
     acc_score = acc_reward_weight * acc
     format_score = format_reward_weight * format_score
 
-    trajectory_guided_multiplier = 0
-    if tool_call_count >= 0 and format_score == 1 and acc_score == 1:
-        base_additional_bonus = 1
-        trajectory_guided_multiplier = base_additional_bonus / 2
-    score = acc_score * (1 + trajectory_guided_multiplier) + format_score
+    tool_reward = 0
+    if tool_call_count >= 0 and format_score == 1 and acc_score == 1: #大量相同多线索，调不调工具无所谓
+        correct_answer_tool_bonus = 1
+        tool_reward = correct_answer_tool_bonus / 2
+    score = acc_score + format_score + tool_reward
 
     return score, acc_score, format_score
 
@@ -189,7 +189,7 @@ if __name__ == '__main__':
     extra_info = {
         "acc_reward_weight": 1.0,
         "format_reward_weight": 1.0,
-        "use_trajectory_guided_multiplier_weight": 0.5,
+        "use_tool_reward_weight": 0.5,
         "gpt_extract_answer": True,
         "extract_answer_tags": "strict",
     }

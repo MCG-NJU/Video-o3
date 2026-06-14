@@ -212,6 +212,49 @@ def _find_sequence_positions(ids: "torch.Tensor", sequence: list[int]) -> "torch
     return torch.tensor(positions, dtype=torch.long, device=ids.device) if positions else torch.tensor([], dtype=torch.long, device=ids.device)
 
 
+def _group_frame_segments_to_video_segments(
+    frame_segments: list[tuple[int, int]],
+    gap_threshold: int = 30,
+) -> list[tuple[int, int]]:
+    r"""Group frame-level vision segments into video-level segments using gap-based clustering.
+
+    In Qwen3VL's interleaved-timestamp format every frame has its own
+    <|vision_start|> / <|vision_end|> pair.  Consecutive frames inside the
+    same video are separated by a short timestamp token sequence (~6-10
+    tokens), while frames from different videos are separated by much longer
+    conversation text.  We exploit this gap to cluster frames into videos.
+
+    Args:
+        frame_segments: List of (start, end) positions for each frame-level
+            vision segment, already paired and sorted by position.
+        gap_threshold: Maximum token gap between consecutive frames that still
+            counts as the same video.  Defaults to 30, which comfortably sits
+            between typical intra-video gaps (~6-10 tokens for timestamps) and
+            inter-video gaps (tens to hundreds of conversation tokens).
+
+    Returns:
+        List of (video_start, video_end) where video_start is the
+        vision_start position of the first frame and video_end is the
+        vision_end position of the last frame for each video.
+    """
+    if not frame_segments:
+        return []
+
+    video_segments = []
+    group_start = frame_segments[0][0]
+    prev_end = frame_segments[0][1]
+
+    for i in range(1, len(frame_segments)):
+        cur_start, cur_end = frame_segments[i]
+        if cur_start - prev_end >= gap_threshold:
+            video_segments.append((group_start, prev_end))
+            group_start = cur_start
+        prev_end = cur_end
+
+    video_segments.append((group_start, prev_end))
+    return video_segments
+
+
 def convert_2d_to_4d_attention_mask(
     attention_mask: "torch.Tensor", 
     dtype: Optional["torch.dtype"] = None,
@@ -248,6 +291,7 @@ def convert_2d_to_4d_attention_mask(
         raise ValueError(f"Expected 2D attention mask, got shape {attention_mask.shape}")
     
     B, L = attention_mask.shape
+    # print(f"B: {B}, L: {L}")
     device = attention_mask.device
     
     # Convert to bool mask (1/True for valid tokens, 0/False for padding)
@@ -295,21 +339,27 @@ def convert_2d_to_4d_attention_mask(
                     ids = input_ids[b]
                     ids_for_search = input_ids_for_search[b] if input_ids_for_search is not None else ids
 
-                    # Locate all vision segments by matching single-token start/end (use full ids)
-                    # Note: vision segments can be in any part, so we use original ids
+                    # Locate all frame-level vision segments (use full ids)
                     v_starts = torch.nonzero(ids == vision_start_token, as_tuple=False).squeeze(-1)
                     v_ends = torch.nonzero(ids == vision_end_token, as_tuple=False).squeeze(-1)
-                    
-                    # Pair vision start and end tags
+
+                    # Pair frame-level start/end tags
                     v_ptr, e_ptr = 0, 0
-                    vision_segments = []
+                    frame_segments = []
                     while v_ptr < v_starts.numel() and e_ptr < v_ends.numel():
                         if v_starts[v_ptr] < v_ends[e_ptr]:
-                            vision_segments.append((v_starts[v_ptr].item(), v_ends[e_ptr].item()))
+                            frame_segments.append((v_starts[v_ptr].item(), v_ends[e_ptr].item()))
                             v_ptr += 1
                             e_ptr += 1
                         else:
                             e_ptr += 1
+
+                    # Cluster frames into video-level segments.
+                    # Qwen3VL uses interleaved timestamps so each frame has its own
+                    # vision_start/vision_end; consecutive frames of the same video
+                    # are separated by short timestamp tokens (~6-10 tokens) while
+                    # different videos are separated by much longer text.
+                    vision_segments = _group_frame_segments_to_video_segments(frame_segments)
 
                     if len(vision_segments) > 1:
                         first_video_start, first_video_end = vision_segments[0]
@@ -339,6 +389,11 @@ def convert_2d_to_4d_attention_mask(
                             answer_segments = answer_segments[-1:]
                         elif len(answer_segments) == 0:
                             print(f"[WARNING_ATTN_MASK] No answer segments found, skipping masking")
+                            # 打印 input_ids 时不省略中间内容
+                            import numpy as np
+                            np.set_printoptions(threshold=np.inf)
+                            torch.set_printoptions(threshold=float('inf'))
+                            print("input_ids: ", input_ids[b])
                             continue
 
                         for ans_start, ans_end in answer_segments:
@@ -372,18 +427,21 @@ def convert_2d_to_4d_attention_mask(
 
                     v_starts = torch.nonzero(ids == vision_start_token, as_tuple=False).squeeze(-1)
                     v_ends = torch.nonzero(ids == vision_end_token, as_tuple=False).squeeze(-1)
-                    
-                    # Pair vision start and end tags
+
+                    # Pair frame-level start/end tags
                     v_ptr, e_ptr = 0, 0
-                    vision_segments = []
+                    frame_segments = []
                     while v_ptr < v_starts.numel() and e_ptr < v_ends.numel():
                         if v_starts[v_ptr] < v_ends[e_ptr]:
-                            vision_segments.append((v_starts[v_ptr].item(), v_ends[e_ptr].item()))
+                            frame_segments.append((v_starts[v_ptr].item(), v_ends[e_ptr].item()))
                             v_ptr += 1
                             e_ptr += 1
                         else:
                             e_ptr += 1
-                    
+
+                    # Cluster frames into video-level segments (same reasoning as above)
+                    vision_segments = _group_frame_segments_to_video_segments(frame_segments)
+
                     # Only apply masking if there are more than 1 video segments
                     if len(vision_segments) > 1:
                         # Get all video segments except the first video

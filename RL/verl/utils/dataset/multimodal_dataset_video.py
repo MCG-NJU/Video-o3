@@ -85,43 +85,64 @@ def collate_fn(data_list: list[dict]) -> dict:
     return {**tensors, **non_tensors}
 
 
-def process_video_adaptive_token_num(video_path: str, max_tokens: int = 768 * 28 * 28, min_tokens: int = 128 * 28 * 28, fps: float = 2.0, source_frames_fps: float = 4.0):
+# Qwen2.5-VL patch_size=14 -> grid cell 28*28; Qwen3-VL patch_size=16 -> grid cell 32*32
+def _pixels_per_token(patch_size: int) -> int:
+    """Grid cell area in pixels: (patch_size * 2) ** 2."""
+    return (patch_size * 2) ** 2
+
+
+def process_video_adaptive_token_num(
+    video_path: str,
+    max_tokens: int = 768 * (16 * 2) ** 2,  # default for Qwen3-VL patch_size=16
+    min_tokens: int = 128 * (16 * 2) ** 2,
+    fps: float = 2.0,
+    source_frames_fps: float = 4.0,
+    patch_size: int = 16,
+    nframes: Optional[int] = None,
+):
     """
     Process video file using my_qwen_vl_utils.vision_process.fetch_video_raw and resample_video_from_raw
-    
+
     Args:
         video_path: Path to the video file
-        max_tokens: Maximum tokens per frame (default for video)
-        min_tokens: Minimum tokens per frame (default for video)
-    
+        max_tokens: Maximum tokens (total) for video
+        min_tokens: Minimum tokens (total) for video
+        fps: Target fps for sampling (ignored when nframes is set).
+        source_frames_fps: FPS of source frame dir (for non-mp4).
+        patch_size: Vision patch size (Qwen3-VL=16, Qwen2.5-VL=14). Used for pixels-per-token.
+        nframes: If set, use this number of frames for sampling; takes precedence over fps.
+            When both fps and nframes are provided, nframes is used.
+
     Returns:
-        tuple: (processed_video_tensor, raw_video_tensor, sample_fps)
-            - processed_video_tensor: Resampled video tensor with shape (T, C, H, W)
-            - raw_video_tensor: Raw video tensor with shape (T, C, H, W)
-            - sample_fps: Sample fps from fetch_video_raw
+        tuple: (processed_video_tensor, sample_fps, raw_video_tensor, raw_sample_fps)
     """
     assert os.path.exists(video_path), f"Video path {video_path} not exists."
-    
+    pixels_per_token = _pixels_per_token(patch_size)
+
     try:
-        # Create video element dict for fetch_video_raw
+        # Create video element dict for fetch_video_raw.
+        # vision_process accepts either "fps" or "nframes", not both. Prefer nframes when set.
         video_ele = {
             "video": video_path,
-            "fps": fps,
             "source_frames_fps": source_frames_fps,
         }
+        if nframes is not None:
+            video_ele["nframes"] = nframes
+        else:
+            video_ele["fps"] = fps
         # Fetch raw video and fps
         if video_path.endswith(".mp4"):
             raw_video, raw_sample_fps = fetch_video_raw(video_ele)
         else:
             raw_video, raw_sample_fps = fetch_video_raw_frame(video_ele)
-        
-        frames_num=raw_video.shape[0]
-        max_tokens_per_frame = max_tokens // (frames_num//2)
-        min_tokens_per_frame = min_tokens // (frames_num//2)
+
+        frames_num = raw_video.shape[0]
+        max_tokens_per_frame = max_tokens // (frames_num // 2)
+        min_tokens_per_frame = min_tokens // (frames_num // 2)
         # Create video element dict for resample_video_from_raw
         resample_ele = {
-            "max_pixels": max_tokens_per_frame * 28 * 28,
-            "min_pixels": min_tokens_per_frame * 28 * 28,
+            "max_pixels": max_tokens_per_frame * pixels_per_token,
+            "min_pixels": min_tokens_per_frame * pixels_per_token,
         }
         # Resample and resize video
         video, sample_fps = resample_video_from_raw(
@@ -157,8 +178,10 @@ class MultiModalDatasetVideo(Dataset):
                  return_raw_chat=False,
                  truncation='error',
                  system_prompt: str = None,
-                 max_pixels: int = 768 * 28 * 28,  # Default for video
-                 min_pixels: int = 128 * 28 * 28,  # Default for video
+                 max_pixels: int = 16384,  # Default for video
+                 min_pixels: int = 512,  # Default for video
+                 patch_size: int = 16,
+                 nframes: Optional[int] = None,  # If set, sample this many frames (overrides fps)
                  mask_blank: bool = False,
                  use_3drope: bool = True,
                  general_qa_reward_fn: str = 'v1',
@@ -191,7 +214,14 @@ class MultiModalDatasetVideo(Dataset):
         self.system_prompt = system_prompt
         self.max_pixels = max_pixels
         self.min_pixels = min_pixels
-        
+        self.patch_size = self.processor.video_processor.patch_size # Qwen3-VL=16, Qwen2.5-VL=14
+        print(f"self.patch_size: {self.patch_size}")
+        self.nframes = nframes  # when set, use nframes instead of fps for sampling
+        if self.nframes is not None:
+            print(f"self.nframes: {self.nframes}")
+        else:
+            print(f"self.nframes is not set, using fps for sampling")
+
         self.mask_blank = mask_blank
         self.use_3drope = use_3drope
         self.general_qa_reward_fn = general_qa_reward_fn
@@ -255,21 +285,45 @@ class MultiModalDatasetVideo(Dataset):
             video_path = row_dict[self.video_key]
             try:
                 # Process video using fetch_video_raw and resample_video_from_raw
-                video_tensor, sample_fps, raw_video_tensor, raw_sample_fps = process_video_adaptive_token_num(video_path, self.max_pixels, self.min_pixels, fps=float(os.environ.get('SELF_SET_OVERVIEW_FPS', 2.0)), source_frames_fps=row_dict.get('frame_fps', 4.0))
-                # Save processed video and raw video with fps
-                row_dict['multi_modal_data'] = {'video': [video_tensor]}
+                video_tensor, sample_fps, raw_video_tensor, raw_sample_fps = process_video_adaptive_token_num(
+                    video_path, self.max_pixels, self.min_pixels,
+                    fps=float(os.environ.get('SELF_SET_OVERVIEW_FPS', 2.0)),
+                    source_frames_fps=row_dict.get('frame_fps', 4.0),
+                    patch_size=self.patch_size,
+                    nframes=self.nframes,
+                )
+                # Save processed video and raw video with fps.
+                # video_metadata must be stored INSIDE the (tensor, metadata) tuple, NOT as a
+                # top-level key in multi_modal_data – vllm's multimodal parser only recognises
+                # 'video' / 'image' as modality keys and will raise "Unsupported modality" for
+                # anything else.
+                _video_metadata = {
+                    'total_num_frames': video_tensor.shape[0],
+                    'fps': sample_fps,
+                    'duration': video_tensor.shape[0] / sample_fps,
+                    'frames_indices': list(range(video_tensor.shape[0])),
+                }
+
+                # from pprint import pprint
+                # metadata_to_print = {k: v for k, v in _video_metadata.items() if k != "frames_indices"}
+                # metadata_to_print["type"] = "video_raw"
+                # pprint(metadata_to_print)
+
+                row_dict['multi_modal_data'] = {
+                    'video': [(video_tensor, _video_metadata)],
+                }
                 row_dict['video_fps_used'] = {'fps':[sample_fps]}
                 if video_path.endswith(".mp4"):
                     row_dict['raw_multi_modal_metadata'] = {
                         'video': {'path': video_path, 'tensor': raw_video_tensor},
                         'fps': raw_sample_fps,
-                        'length': raw_video_tensor.shape[0] / raw_sample_fps
+                        'length': raw_video_tensor.shape[0] / raw_sample_fps,
                     }
                 else:
                     row_dict['raw_multi_modal_metadata'] = {
                         'video': {'path': video_path, 'tensor': torch.zeros(0, dtype=torch.uint8)},
                         'fps': row_dict.get('frame_fps', 4.0),
-                        'length': raw_video_tensor.shape[0] / raw_sample_fps
+                        'length': raw_video_tensor.shape[0] / raw_sample_fps,
                     }
                 time_instruction = f"This video is uniformly sampled at {(sample_fps):.2f} fps, contains {video_tensor.shape[0]} frames from 0 seconds to {(video_tensor.shape[0]/sample_fps-0.05):.1f} seconds."
             except Exception as e:
@@ -277,7 +331,7 @@ class MultiModalDatasetVideo(Dataset):
                 return self.__getitem__(item+1) if item + 1 < len(self) else self.__getitem__(0)
             
             raw_prompt = prompt_with_chat_template.replace('<video>', '<|vision_start|><|video_pad|><|vision_end|>' + time_instruction)
-            video_inputs = self.processor.video_processor(row_dict['multi_modal_data']['video'])
+            video_inputs = self.processor.video_processor([video_tensor],video_metadata=_video_metadata,do_sample_frames=False,do_resize=False)
             video_grid_thw = video_inputs.get('video_grid_thw', None)
             merge_length = self.processor.video_processor.merge_size**2
 
@@ -302,7 +356,7 @@ class MultiModalDatasetVideo(Dataset):
             attention_mask[input_ids == image_token_id] = 0
 
         if self.use_3drope and self.video_key in row_dict and video_grid_thw is not None:
-            from verl.models.transformers.qwen2_vl import get_rope_index
+            from verl.models.transformers.rope_utils import get_rope_index
             position_ids = [
                 get_rope_index(
                     self.processor,

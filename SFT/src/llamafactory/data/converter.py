@@ -38,6 +38,19 @@ if TYPE_CHECKING:
 
 logger = logging.get_logger(__name__)
 
+# 备用路径替换：public-dataset-p2 -> public-dataset-p2-1，按位置直接拼接，避免 replace 的重复扫描
+_FALLBACK_OLD_PREFIX = "public-dataset-p2"
+_FALLBACK_NEW_PREFIX = "public-dataset-p2-1"
+_FALLBACK_OLD_LEN = len(_FALLBACK_OLD_PREFIX)
+
+
+def _fallback_media_path(path: str) -> Optional[str]:
+    """若 path 中包含 public-dataset-p2，则按精确位置替换为 public-dataset-p2-1，否则返回 None。"""
+    idx = path.find(_FALLBACK_OLD_PREFIX)
+    if idx < 0:
+        return None
+    return path[:idx] + _FALLBACK_NEW_PREFIX + path[idx + _FALLBACK_OLD_LEN :]
+
 
 @dataclass
 class DatasetConverter:
@@ -56,39 +69,64 @@ class DatasetConverter:
             medias = medias[:]
 
         if self.dataset_attr.load_from in ["script", "file"]:
+            fallback_count = 0
             # 如果是单个路径
             if isinstance(medias[0], str):
                 for i in range(len(medias)):
-                    media_path = os.path.join(self.data_args.media_dir, medias[i])
-                    # media_path = medias[i]
+                    original_media = medias[i]
+                    media_path = os.path.join(self.data_args.media_dir, original_media)
                     if os.path.isfile(media_path):
                         medias[i] = media_path
                     else:
+                        # 尝试 public-dataset-p2 -> public-dataset-p2-1 的备用路径（按位置替换，避免 replace 重复扫描）
+                        alt_media = _fallback_media_path(original_media)
+                        if alt_media is not None:
+                            fallback_count += 1
+                            medias[i] = os.path.join(self.data_args.media_dir, alt_media)
+                            continue
+                        # 两个路径都不存在：保留原始路径并告警
                         logger.warning_rank0_once(
-                            f"Media {medias[i]} does not exist in `media_dir`. Use original path."
+                            f"[WARNING] Media (medias[i]: {original_media}, media_path: {media_path}) does not exist in `media_dir`. Use original path."
                         )
             # 如果是列表
             elif isinstance(medias[0], list):  # for processed video frames
                 # medias is a list of lists, e.g., [[frame1.jpg, frame2.jpg], [frame3.jpg, frame4.jpg]]
                 for i in range(len(medias)):
                     for j in range(len(medias[i])):
-                        media_path = os.path.join(self.data_args.media_dir, medias[i][j])
+                        original_media = medias[i][j]
+                        media_path = os.path.join(self.data_args.media_dir, original_media)
                         if os.path.isfile(media_path):
                             medias[i][j] = media_path
                         else:
+                            alt_media = _fallback_media_path(original_media)
+                            if alt_media is not None:
+                                fallback_count += 1
+                                medias[i][j] = os.path.join(self.data_args.media_dir, alt_media)
+                                continue
                             logger.warning_rank0_once(
-                                f"Media {medias[i][j]} does not exist in `media_dir`. Use original path."
+                                f"[WARNING] Media (medias[i][j]: {original_media}, media_path: {media_path}) does not exist in `media_dir`. Use original path."
                             )
             # 如果是字典
             elif isinstance(medias[0], dict):
                 for i in range(len(medias)):
-                    media_path = os.path.join(self.data_args.media_dir, medias[i]["url"])
+                    original_media = medias[i]["url"]
+                    media_path = os.path.join(self.data_args.media_dir, original_media)
                     if os.path.isfile(media_path):
                         medias[i]["url"] = media_path
                     else:
+                        alt_media = _fallback_media_path(original_media)
+                        if alt_media is not None:
+                            fallback_count += 1
+                            medias[i]["url"] = os.path.join(self.data_args.media_dir, alt_media)
+                            continue
                         logger.warning_rank0_once(
-                            f"Media {medias[i]['url']} does not exist in `media_dir`. Use original path."
+                            f"[WARNING] Media (medias[i]['url']: {original_media}, media_path: {media_path}) does not exist in `media_dir`. Use original path."
                         )
+
+            # if fallback_count > 0:
+            #     logger.warning_rank0_once(
+            #         f"[INFO] Replaced {fallback_count} media path(s) with fallback (public-dataset-p2 -> public-dataset-p2-1)."
+            #     )
 
         return medias
 

@@ -29,6 +29,7 @@ from typing import Type, Dict
 from copy import deepcopy
 import json
 
+import ray
 import numpy as np
 from codetiming import Timer
 from omegaconf import OmegaConf, open_dict
@@ -558,6 +559,7 @@ class RayPPOTrainer(object):
                 system_prompt=system_prompt,
                 max_pixels=self.config.data.max_pixels,
                 min_pixels=self.config.data.min_pixels,
+                patch_size=self.config.data.get('patch_size', 14),
                 mask_blank=self.config.data.mask_blank,
                 use_3drope=self.config.trainer.use_3drope,
                 general_qa_reward_fn=self.config.data.get("general_qa_reward_fn", "general_qa_tool"),
@@ -579,6 +581,8 @@ class RayPPOTrainer(object):
                 system_prompt=system_prompt,
                 max_pixels=self.config.data.max_pixels,
                 min_pixels=self.config.data.min_pixels,
+                patch_size=self.config.data.patch_size,  # Qwen3-VL=16, Qwen2.5-VL=14
+                nframes=self.config.data.get("nframes"),  # if set, overrides fps for frame sampling
                 mask_blank=self.config.data.mask_blank,
                 use_3drope=self.config.trainer.use_3drope,
                 general_qa_reward_fn=self.config.data.get("general_qa_reward_fn", "general_qa_tool"),
@@ -630,6 +634,7 @@ class RayPPOTrainer(object):
                     system_prompt=system_prompt,
                     max_pixels=self.config.data.max_pixels,
                     min_pixels=self.config.data.min_pixels,
+                    patch_size=self.config.data.get('patch_size', 14),
                     mask_blank=self.config.data.mask_blank,
                     use_3drope=self.config.trainer.use_3drope,
                     general_qa_reward_fn=self.config.data.get("general_qa_reward_fn", "general_qa_tool"),
@@ -650,6 +655,8 @@ class RayPPOTrainer(object):
                     system_prompt=system_prompt,
                     max_pixels=self.config.data.max_pixels,
                     min_pixels=self.config.data.min_pixels,
+                    patch_size=self.config.data.patch_size,  # Qwen3-VL=16, Qwen2.5-VL=14
+                    nframes=self.config.data.get("nframes"),  # if set, overrides fps for frame sampling
                     mask_blank=self.config.data.mask_blank,
                     use_3drope=self.config.trainer.use_3drope,
                     general_qa_reward_fn=self.config.data.get("general_qa_reward_fn", "general_qa_tool"),
@@ -1163,6 +1170,19 @@ class RayPPOTrainer(object):
                 checkpoint_folder = os.path.join(working_dir, checkpoint_folder)
             global_step_folder = find_latest_ckpt_path(checkpoint_folder)  # None if no latest
 
+        # When resume_from_path is set, use it (load from old ckpt dir while saving to default_local_dir).
+        resume_from_path = getattr(self.config.trainer, 'resume_from_path', None)
+        if resume_from_path and str(resume_from_path).strip().lower() not in ('false', 'none', ''):
+            resume_from_path = str(resume_from_path).strip()
+            if not os.path.isabs(resume_from_path):
+                resume_from_path = os.path.join(os.getcwd(), resume_from_path)
+            if 'global_step_' in os.path.basename(resume_from_path):
+                global_step_folder = resume_from_path
+            else:
+                global_step_folder = find_latest_ckpt_path(resume_from_path) or global_step_folder
+            if global_step_folder:
+                print(f'Using resume_from_path: {resume_from_path} -> {global_step_folder}')
+
         # find global_step_folder
         if self.config.trainer.resume_mode == 'auto':
             if global_step_folder is None:
@@ -1380,6 +1400,8 @@ class RayPPOTrainer(object):
         num_prompt_in_batch = 0
         num_gen_batches = 0
         statistics_dict = self._initialize_statistics_dict()
+        # Async rollout: wake once per step for all rolls, sleep only before PPO update (avoids repeated wake/sleep when rechunking).
+        self._rollout_woken_this_step = False
         for epoch in range(self.config.trainer.total_epochs):
             prev = time.time()
             batch_step = 0
@@ -1437,9 +1459,12 @@ class RayPPOTrainer(object):
                         if not self.async_rollout_mode:
                             gen_batch_output = self.actor_rollout_wg.generate_sequences(gen_batch)
                         else:
-                            self.async_rollout_manager.wake_up()
+                            # Wake once per step; stay awake across multiple rolls (rejection_sample rechunk) to avoid repeated engine load/unload.
+                            if not self._rollout_woken_this_step:
+                                self.async_rollout_manager.wake_up()
+                                self._rollout_woken_this_step = True
                             gen_batch_output = self.async_rollout_manager.generate_sequences(gen_batch)
-                            self.async_rollout_manager.sleep()
+                            # Sleep only when we have enough and are about to do PPO (see below), not after every gen.
 
                         gen_cur = time.time()
                         print(f"<<<TRAINING_MARK>>> self.global_steps {self.global_steps}: batch generation ends !!! Now Time: {time.strftime('%Y-%m-%d %H:%M:%S', time.localtime(gen_cur))}")
@@ -1544,6 +1569,11 @@ class RayPPOTrainer(object):
                         else:
                             batch = new_batch
 
+                        # Async rollout: sleep once after all rolls for this step, before FSDP/PPO uses GPU.
+                        if self.async_rollout_mode:
+                            self.async_rollout_manager.sleep()
+                            self._rollout_woken_this_step = False
+
                         # balance the number of valid tokens on each dp rank.
                         # Note that this breaks the order of data inside the batch.
                         # Please take care when you implement group based adv computation such as GRPO and rloo
@@ -1622,11 +1652,25 @@ class RayPPOTrainer(object):
                 num_prompt_in_batch = 0
                 num_gen_batches = 0
                 statistics_dict = self._initialize_statistics_dict()
+                self._rollout_woken_this_step = False  # next step will wake rollout again
 
                 # TODO: make a canonical logger that supports various backend
                 logger.log(data=metrics, step=self.global_steps)
 
                 self.global_steps += 1
+
+                # Optional: save Ray timeline every N steps for performance profiling
+                ray_kwargs = getattr(self.config, "ray_kwargs", None)
+                if ray_kwargs is not None:
+                    timeline_freq = getattr(ray_kwargs, "timeline_save_freq", None)
+                    if timeline_freq is not None and timeline_freq > 0 and self.global_steps % timeline_freq == 0:
+                        out_dir = getattr(ray_kwargs, "timeline_output_dir", None)
+                        if not out_dir:
+                            out_dir = os.environ.get("LOG_SAVE_DIR") or getattr(self.config.trainer, "default_local_dir", ".")
+                        os.makedirs(out_dir, exist_ok=True)
+                        path = os.path.join(out_dir, f"ray_timeline_step_{self.global_steps}.json")
+                        ray.timeline(filename=path)
+                        print(f"Ray timeline saved to {path}")
 
                 print(f"end: self.global_steps: {self.global_steps}")
 

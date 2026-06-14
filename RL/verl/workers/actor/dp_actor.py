@@ -45,6 +45,7 @@ class DataParallelPPOActor(BasePPOActor):
         config,
         actor_module: nn.Module,
         actor_optimizer: torch.optim.Optimizer = None,
+        processor=None,
     ):
         """When optimizer is None, it is Reference Policy"""
         super().__init__(config)
@@ -57,7 +58,7 @@ class DataParallelPPOActor(BasePPOActor):
 
         self.compute_entropy_from_logits = torch.compile(verl_F.entropy_from_logits, dynamic=True)
         # add image processor
-        self.processor = hf_processor(config.model_local_path)
+        self.processor = processor if processor is not None else hf_processor(config.model_local_path)
 
     def _prepare_multi_modal_inputs(self, multi_modal_data: Iterable[Any]) -> List[Dict[str, Any]]:
         processed_inputs: List[Dict[str, Any]] = []
@@ -68,7 +69,20 @@ class DataParallelPPOActor(BasePPOActor):
                 image_inputs = self.processor.image_processor(modal_entry['image'], return_tensors='pt')
                 processed_inputs.append({key: val for key, val in image_inputs.items()})
             elif 'video' in modal_entry:
-                video_inputs = self.processor.video_processor(modal_entry['video'])
+                video_data = modal_entry['video']
+                video = [v[0] if isinstance(v, tuple) else v for v in video_data]
+                video_metadata = [v[1] for v in video_data if isinstance(v, tuple)]
+                # video,video_metadata = video_data[0]
+                # transformers video_processor 在 videos 为空时会访问 videos[0] 导致 IndexError，此处做防护
+                if not video_data or (isinstance(video_data, (list, tuple)) and len(video_data) == 0):
+                    raise ValueError(
+                        f"Empty video at multi_modal_data index {idx}. "
+                        "Check that rollout/dataset did not produce empty video (e.g. missing path or zero frames)."
+                    )
+                
+                # video_metadata = modal_entry['video_metadata']
+
+                video_inputs = self.processor.video_processor(video,video_metadata=video_metadata,do_sample_frames=False,do_resize=False)
                 processed_inputs.append({key: val for key, val in video_inputs.items()})
             else:
                 raise KeyError(f"Unsupported multi-modal entry at index {idx}: {list(modal_entry.keys())}")
@@ -84,8 +98,14 @@ class DataParallelPPOActor(BasePPOActor):
         multi_modal_inputs = {}
         if 'multi_modal_inputs' in micro_batch:
             for key in micro_batch['multi_modal_inputs'][0].keys():
-                multi_modal_inputs[key] = torch.cat([inputs[key] for inputs in micro_batch['multi_modal_inputs']],
-                                                    dim=0)
+                try:
+                    multi_modal_inputs[key] = torch.cat([inputs[key] for inputs in micro_batch['multi_modal_inputs']],
+                                                        dim=0)
+                except Exception as e:
+                    print(f"[dp_actor] torch.cat failed for key={key!r}: {e}")
+                    for i, inputs in enumerate(micro_batch['multi_modal_inputs']):
+                        print(f"  [{i}] inputs[{key!r}] = {inputs[key]}")
+                    raise
 
         with torch.autocast(device_type='cuda', dtype=torch.bfloat16):
             input_ids = micro_batch['input_ids']

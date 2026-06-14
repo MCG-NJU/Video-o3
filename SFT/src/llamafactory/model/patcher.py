@@ -81,6 +81,21 @@ def patch_tokenizer(tokenizer: "PreTrainedTokenizer", model_args: "ModelArgument
             logger.warning_rank0("New special tokens have been added, changed `resize_vocab` to True.")
 
 
+def _resolve_processor_patch_size(processor: "ProcessorMixin", model_args: "ModelArguments") -> int:
+    r"""Resolve patch size from yaml override or HuggingFace processor sub-modules."""
+    if model_args.patch_size is not None:
+        return model_args.patch_size
+
+    for attr in ("video_processor", "image_processor"):
+        sub_processor = getattr(processor, attr, None)
+        if sub_processor is not None:
+            patch_size = getattr(sub_processor, "patch_size", None)
+            if patch_size is not None:
+                return patch_size
+
+    return getattr(processor, "patch_size", 14)
+
+
 def patch_processor(
     processor: "ProcessorMixin",
     tokenizer: "PreTrainedTokenizer",
@@ -99,6 +114,7 @@ def patch_processor(
     setattr(processor, "audio_sampling_rate", model_args.audio_sampling_rate)
     setattr(processor, "max_token_number", model_args.max_token_number)
     setattr(processor, "min_token_number", model_args.min_token_number)
+    setattr(processor, "patch_size", _resolve_processor_patch_size(processor, model_args))
 
 
 def patch_config(

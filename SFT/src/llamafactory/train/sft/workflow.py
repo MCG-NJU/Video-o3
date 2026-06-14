@@ -17,10 +17,12 @@
 
 from typing import TYPE_CHECKING, Optional
 
+import torch
+
 from ...data import SFTDataCollatorWith4DAttentionMask, get_dataset, get_template_and_fix_tokenizer
 from ...extras.constants import IGNORE_INDEX
 from ...extras.logging import get_logger
-from ...extras.misc import calculate_tps
+from ...extras.misc import calculate_tps, count_parameters
 from ...extras.ploting import plot_loss
 from ...model import load_model, load_tokenizer
 from ..callbacks import ExtraSaveStepsCallback
@@ -36,6 +38,60 @@ if TYPE_CHECKING:
 
 
 logger = get_logger(__name__)
+
+
+def _format_gib(num_bytes: int) -> str:
+    return f"{num_bytes / (1024 ** 3):.2f} GiB"
+
+
+def _log_pretrain_model_overview(
+    model: "torch.nn.Module",
+    model_args: "ModelArguments",
+    training_args: "Seq2SeqTrainingArguments",
+    finetuning_args: "FinetuningArguments",
+) -> None:
+    trainable_params, total_params = count_parameters(model)
+
+    def _safe_numel(param: "torch.nn.Parameter") -> int:
+        numel = param.numel()
+        if numel == 0 and hasattr(param, "ds_numel"):  # ZeRO-3 placeholder params
+            numel = int(param.ds_numel)
+        return numel
+
+    total_param_bytes = sum(_safe_numel(param) * param.element_size() for param in model.parameters())
+    cuda_param_bytes = sum(
+        _safe_numel(param) * param.element_size() for param in model.parameters() if param.device.type == "cuda"
+    )
+
+    model_type = getattr(model.config, "model_type", "unknown")
+    model_arch = model.__class__.__name__
+    train_type = finetuning_args.finetuning_type
+    precision_type = str(model_args.compute_dtype)
+
+    logger.info_rank0("========== Pre-Train Model Check ==========")
+    logger.info_rank0(f"model_type: {model_type} | model_arch: {model_arch}")
+    logger.info_rank0(f"train_stage: sft | train_type: {train_type} | precision: {precision_type}")
+    trainable_ratio = 100 * trainable_params / total_params if total_params > 0 else 0.0
+    logger.info_rank0(
+        f"params -> trainable: {trainable_params:,} | all: {total_params:,} | trainable%: {trainable_ratio:.4f}"
+    )
+    logger.info_rank0(
+        f"param_memory(est.) -> all_params: {_format_gib(total_param_bytes)} | cuda_params: {_format_gib(cuda_param_bytes)}"
+    )
+
+    if torch.cuda.is_available():
+        device = torch.cuda.current_device()
+        allocated = torch.cuda.memory_allocated(device)
+        reserved = torch.cuda.memory_reserved(device)
+        max_allocated = torch.cuda.max_memory_allocated(device)
+        max_reserved = torch.cuda.max_memory_reserved(device)
+        logger.info_rank0(
+            "cuda_memory(now/max) -> "
+            f"allocated: {_format_gib(allocated)}/{_format_gib(max_allocated)} | "
+            f"reserved: {_format_gib(reserved)}/{_format_gib(max_reserved)}"
+        )
+
+    logger.info_rank0("==========================================")
 
 
 def run_sft(
@@ -104,6 +160,7 @@ def run_sft(
 
     # Training
     if training_args.do_train:
+        # _log_pretrain_model_overview(model, model_args, training_args, finetuning_args)
         train_result = trainer.train(resume_from_checkpoint=training_args.resume_from_checkpoint)
         trainer.save_model()
         if finetuning_args.include_effective_tokens_per_second:

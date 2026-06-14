@@ -26,7 +26,7 @@ from verl import DataProto
 from verl.utils.fs import copy_to_local
 from verl.utils.model import compute_position_id_with_mask
 from verl.utils.torch_functional import pad_sequence_to_length, get_eos_mask, get_final_eos_mask, pad_2d_list_to_length
-from verl.models.transformers.qwen2_vl import get_rope_index
+from verl.models.transformers.rope_utils import get_rope_index
 from verl.workers.rollout.vllm_rollout.schemas import (
     AsyncRolloutRequest,
     AsyncRolloutRequestStateEnum,
@@ -59,6 +59,13 @@ from .function_tools_video import (
     crop_video,
     get_valid_mask,
 )
+
+from pprint import pprint
+
+# 传给 video_processor 的 kwargs，与 metadata 中的处理器相关字段统一由此提供（如 do_sample_frames）。
+# 用于构造 video_metadata 时合并进去，以及 prepare_inputs_for_vllm 返回的 mm_processor_kwargs。
+MM_VIDEO_PROCESSOR_KWARGS = {"do_sample_frames": False,'do_resize': False}
+
 
 def _get_model_runner_workers(vllm_config, init_ray: bool = True):
     assert vllm_config.instance_id is not None, "instance_id must be set for external ray actors."
@@ -127,6 +134,7 @@ class ExternalRayDistributedExecutor(Executor):
         timeout: Optional[float] = None,
         args: Tuple = (),
         kwargs: Optional[Dict[str, Any]] = None,
+        non_block: bool = False,
     ) -> List[Any]:
         # TODO(wuxibin): support ray compiled graph
         if isinstance(method, str):
@@ -174,6 +182,7 @@ class ExternalZeroMQDistributedExecutor(Executor):
         timeout: Optional[float] = None,
         args: Tuple = (),
         kwargs: Optional[Dict[str, Any]] = None,
+        non_block: bool = False,
     ) -> List[Any]:
         if isinstance(method, str):
             sent_method = method
@@ -421,7 +430,13 @@ class AsyncvLLMEngine:
         return req_list
 
     def calculate_video_token_num(self, video):
-        video_inputs = self.processor.video_processor([video])
+        if isinstance(video, tuple):
+            video, video_meta = video
+            video_inputs = self.processor.video_processor(
+                video, video_metadata=video_meta, return_metadata=True,do_sample_frames=False,do_resize=False
+            )
+        else:
+            video_inputs = self.processor.video_processor([video])
         grid_thw = video_inputs['video_grid_thw'][0]
         video_token_num = int(grid_thw.prod().item() // self.merge_length)
         return video_token_num
@@ -435,7 +450,14 @@ class AsyncvLLMEngine:
 
         video_grid_thws = []
         if 'video' in vllm_input['multi_modal_data'] and len(vllm_input['multi_modal_data']['video']) > 1:
-            processed_video_inputs = self.processor.video_processor(vllm_input['multi_modal_data']['video'][1:])
+            # Videos may be stored as (tensor, metadata) tuples for Qwen3-VL; extract tensors and metadata.
+            clip_list = vllm_input['multi_modal_data']['video'][1:]
+            raw_video_clips = [v[0] if isinstance(v, tuple) else v for v in clip_list]
+            clip_metadata = [v[1] for v in clip_list if isinstance(v, tuple)]
+            video_metadata = clip_metadata if len(clip_metadata) == len(raw_video_clips) else None
+            processed_video_inputs = self.processor.video_processor(
+                raw_video_clips, video_metadata=video_metadata, return_metadata=True,do_sample_frames=False,do_resize=False
+            )
             video_grid_thws = processed_video_inputs['video_grid_thw']
         all_response_masks = torch.cat(multi_turn_response_mask[1:], dim=0).tolist()
         
@@ -527,11 +549,22 @@ class AsyncvLLMEngine:
                 else:
                     temporal_segment, sampling_strategy = args
                     try:
+                        rollout_cfg = self.config.rollout
+                        crop_kwargs = {
+                            "frames_sample_fps": getattr(rollout_cfg, "crop_frames_sample_fps", 2.0),
+                            "patch_size": getattr(self.processor.video_processor, "patch_size", 14),
+                            "min_tokens": getattr(rollout_cfg, "crop_min_tokens", 512),
+                            "max_tokens_coarse": getattr(rollout_cfg, "crop_max_tokens_coarse", 2048),
+                            "max_tokens_medium": getattr(rollout_cfg, "crop_max_tokens_medium", 4096),
+                            "max_tokens_fine": getattr(rollout_cfg, "crop_max_tokens_fine", 6144),
+                            "max_tokens_per_frame_cap": getattr(rollout_cfg, "crop_max_tokens_per_frame_cap", 768),
+                        }
                         video_crop, video_crop_fps = crop_video(
                             raw_video,
                             raw_fps,
                             temporal_segment,
-                            sampling_strategy
+                            sampling_strategy,
+                            **crop_kwargs,
                         )
                         if isinstance(video_crop, np.ndarray):
                             video_clip_tensor = torch.from_numpy(video_crop)
@@ -567,8 +600,21 @@ class AsyncvLLMEngine:
             vllm_input['prompt_token_ids'] += next_turn_prompt_ids  # this might go over response length
 
             video_clip = tool_outputs['video']
-            vllm_input['multi_modal_data']['video'].append(video_clip)
-            video_fps_used_list.append(tool_outputs['fps'])
+            clip_fps = tool_outputs['fps']
+            clip_num_frames = video_clip.shape[0]
+            clip_metadata = {
+                "fps": clip_fps,
+                "duration": clip_num_frames / clip_fps,
+                "total_num_frames": clip_num_frames,
+                "frames_indices": list(range(clip_num_frames)),
+            }
+            # # INSERT_YOUR_CODE
+            # metadata_to_print = {k: v for k, v in clip_metadata.items() if k != "frames_indices"}
+            # metadata_to_print["type"] = "video_clip_"
+            # pprint(metadata_to_print)
+
+            vllm_input['multi_modal_data']['video'].append((video_clip, clip_metadata))
+            video_fps_used_list.append(clip_fps)
             multi_turn_response_mask.append(
                 torch.zeros(
                     len(next_turn_prompt_ids),
@@ -577,7 +623,7 @@ class AsyncvLLMEngine:
                 )
             )  # USER, Mark as 0
 
-            video_token_num = self.calculate_video_token_num(video_clip)
+            video_token_num = self.calculate_video_token_num((video_clip, clip_metadata))
             new_context_length = len(next_turn_prompt_ids) + video_token_num - 1
         else:
             error_message = f"ERROR occurs during grounding. Error Information: {error_info}.\n" if error_info else "ERROR occurs during grounding.\n"
@@ -635,7 +681,7 @@ class AsyncvLLMEngine:
 
         if _req.multi_modal_data:
             multi_modal_data = _req.multi_modal_data
-            vllm_input = {'prompt_token_ids': _req.raw_prompt_id, 'multi_modal_data': multi_modal_data}
+            vllm_input = {'prompt_token_ids': _req.raw_prompt_id, 'multi_modal_data': multi_modal_data, 'mm_processor_kwargs': MM_VIDEO_PROCESSOR_KWARGS}
             if hasattr(_req, 'video_fps_used') and isinstance(_req.video_fps_used, dict):
                 video_fps_used_list = list(_req.video_fps_used.get('fps', []))
             raw_multi_modal_metadata = getattr(_req, 'raw_multi_modal_metadata', None)
@@ -643,6 +689,36 @@ class AsyncvLLMEngine:
                 raw_video = raw_multi_modal_metadata.get('video')
                 raw_video_fps = raw_multi_modal_metadata.get('fps')
             raw_video_length = getattr(_req, 'raw_video_length', None)
+
+            # Qwen3-VL requires videos as (tensor, metadata) tuples (video_needs_metadata=True).
+            # Wrap raw tensors with metadata so vLLM's _call_hf_processor can access fps etc.
+            # if 'video' in multi_modal_data:
+            #     videos_with_meta = []
+            #     for i, video in enumerate(multi_modal_data['video']):
+            #         if isinstance(video, tuple):
+            #             videos_with_meta.append(video)
+            #         else:
+            #             fps = video_fps_used_list[i] if i < len(video_fps_used_list) else 2.0
+            #             num_frames = video.shape[0]
+            #             video_metadata = {
+            #                 "fps": fps,
+            #                 "duration": num_frames / fps,
+            #                 "total_num_frames": num_frames,
+            #                 "frames_indices": list(range(num_frames)),
+            #             }
+            #             metadata_to_print = {k: v for k, v in video_metadata.items() if k != "frames_indices"}
+            #             metadata_to_print["type"] = "video_raw"
+            #             pprint(metadata_to_print)
+            #             # print(f"[video_metadata] video_idx={i}, shape={video.shape}, metadata={video_metadata}")
+            #             videos_with_meta.append((video, video_metadata))
+            #     multi_modal_data['video'] = videos_with_meta
+
+            # mm_processor_kwargs =  MM_VIDEO_PROCESSOR_KWARGS # hard code now
+            # vllm_input = {
+            #     'prompt_token_ids': _req.raw_prompt_id,
+            #     'multi_modal_data': multi_modal_data,
+            #     'mm_processor_kwargs': mm_processor_kwargs,
+            # }
 
         prefix_length = len(_req.raw_prompt_id)
 
@@ -693,6 +769,7 @@ class AsyncvLLMEngine:
         current_iteration = 0
         exceed = False
         void = False
+        skip_overlong = getattr(self.config.actor, 'skip_overlong_prompt', True)
         while current_iteration < max_iterations:
             # with self.update_sampling_params(**kwargs):
 
@@ -703,19 +780,34 @@ class AsyncvLLMEngine:
                     
             # print("current_iteration: ", current_iteration, " sampling_params: ", sampling_params)
 
-            outputs = self.engine.generate(
-                prompt=vllm_input,  # because we have already convert it to prompt token id
-                sampling_params=sampling_params,
-                request_id=_req.request_id+str(current_iteration),
-            )
+            try:
+                outputs = self.engine.generate(
+                    prompt=vllm_input,  # because we have already convert it to prompt token id
+                    sampling_params=sampling_params,
+                    request_id=_req.request_id+str(current_iteration),
+                )
 
-            async for res in outputs:
-                results = res
+                async for res in outputs:
+                    results = res
+            except ValueError as e:
+                err_msg = str(e)
+                print(f"<<<DEBUG>>> err_msg (skip overlong): {err_msg}")
+                if skip_overlong and ("longer than the maximum model length" in err_msg or "max_model_len" in err_msg):
+                    # Prompt (text + multimodal) exceeds max_model_len; mark as exceed and drop this sample
+                    exceed = True
+                    eos_id = getattr(self.tokenizer, 'eos_token_id', None)
+                    response_ = [eos_id if eos_id is not None else self.pad_token_id]
+                    vllm_input['prompt_token_ids'] = list(vllm_input['prompt_token_ids']) + response_
+                    multi_turn_response_mask.append(torch.ones(1, dtype=attention_mask.dtype, device=attention_mask.device))
+                    context_length += 1
+                    break
+                raise
 
             content = results.outputs[0].text
 
             _token_ids = results.outputs[0].token_ids
-            max_special_token_id = max(151664, getattr(self, "video_pad_token_id", 151664))
+            # for qwen3-vl,151667=<think>, 151668=</think>; 需包含 think 标签，否则会被误过滤
+            max_special_token_id = max(151668, getattr(self, "video_pad_token_id", 151664))
             filtered_token_ids = [token_id for token_id in _token_ids if token_id <= max_special_token_id]
             # if 151645 not in filtered_token_ids:
             #     filtered_token_ids = filtered_token_ids + [151645,]
@@ -990,7 +1082,8 @@ class AsyncvLLMEngine:
         if position_ids.dim() == 3:  # qwen2vl mrope
             position_ids_list = []
             for prompt_with_response, attn_mask, multi_modal_data in zip(seq, attention_mask, multi_modal_data_list):
-                video_inputs = self.processor.video_processor(multi_modal_data['video'])
+                video,video_metadata = multi_modal_data['video'][0]
+                video_inputs = self.processor.video_processor(video,video_metadata=video_metadata,do_sample_frames=False,do_resize=False)
                 video_grid_thw = video_inputs['video_grid_thw']
                 pos_ids = get_rope_index(
                     self.processor,

@@ -211,6 +211,8 @@ algorithm:
 trainer:
   rejection_sample: False
   rejection_sample_multiplier: 1 # Multiple the training batch size by this factor to account for rejection sampling reduction.
+  # When set (e.g. 8), dataloader yields small chunks so we only generate until we have enough valid samples, avoiding a full extra batch when only a few more are needed.
+  rejection_sample_chunk_size: null # e.g. 8; null = use train_batch_size * multiplier as before.
   total_epochs: 30
   total_training_steps: null
   project_name: verl_examples
@@ -240,3 +242,13 @@ trainer:
   num_workers: 4
   val_before_train: True
   val_only: False
+
+
+# configs related to ray
+ray_kwargs:
+  # Path to save Ray timeline JSON at the end of training (driver process)
+  timeline_json_file: null
+  # Save Ray timeline every N steps during training (in trainer process). null = disabled
+  timeline_save_freq: null
+  # Directory for periodic timeline files (used when timeline_save_freq > 0). null = use LOG_SAVE_DIR or default_local_dir
+  timeline_output_dir: null

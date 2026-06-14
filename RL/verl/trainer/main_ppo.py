@@ -33,6 +33,16 @@ def run_ppo(config, compute_score=None):
 
     ray.get(main_task.remote(config, compute_score))
 
+    # [Optional] save Ray timeline once at the end (driver process). For periodic save during training, set ray_kwargs.timeline_save_freq in config.
+    ray_kwargs = getattr(config, "ray_kwargs", None)
+    timeline_json_file = getattr(ray_kwargs, "timeline_json_file", None) if ray_kwargs else None
+    if timeline_json_file:
+        try:
+            ray.timeline(filename=timeline_json_file)
+            print(f"Ray timeline (final) saved to {timeline_json_file}")
+        except Exception as e:
+            print(f"Ray timeline save failed: {e}")
+
 
 @ray.remote(num_cpus=1)  # please make sure main_task is not scheduled on head
 def main_task(config, compute_score=None):

@@ -28,13 +28,17 @@ from concurrent.futures import ThreadPoolExecutor
 
 logger = logging.getLogger(__name__)
 
-IMAGE_FACTOR = 28
-MIN_PIXELS = 4 * 28 * 28
-MAX_PIXELS = 16384 * 28 * 28
+# Qwen2.5-VL patch_size=14 -> grid 28; Qwen3-VL patch_size=16 -> grid 32. Default 14 for backward compat.
+_DEFAULT_PATCH_SIZE = int(os.environ.get("VISION_PATCH_SIZE", "14"))
+_GRID = _DEFAULT_PATCH_SIZE * 2  # 28 or 32
+
+IMAGE_FACTOR = _GRID
+MIN_PIXELS = 4 * _GRID * _GRID
+MAX_PIXELS = 16384 * _GRID * _GRID
 MAX_RATIO = 200
 
-VIDEO_MIN_PIXELS = 128 * 28 * 28
-VIDEO_MAX_PIXELS = 768 * 28 * 28
+VIDEO_MIN_PIXELS = 128 * _GRID * _GRID
+VIDEO_MAX_PIXELS = 768 * _GRID * _GRID
 FRAME_FACTOR = 2
 FPS = 2.0
 FPS_MIN_FRAMES = 4
@@ -44,8 +48,8 @@ FPS_MAX_FRAMES = int(os.environ.get('SELF_SET_FPS_MAX_FRAMES', 768))
 # Set the maximum number of video token inputs.
 # Here, 128K represents the maximum number of input tokens for the VLLM model.
 # Remember to adjust it according to your own configuration.
-VIDEO_TOTAL_PIXELS = int(float(os.environ.get('VIDEO_MAX_PIXELS', 128000 * 28 * 28 * 0.9)))
-logger.info(f"set VIDEO_TOTAL_PIXELS: {VIDEO_TOTAL_PIXELS}")
+VIDEO_TOTAL_PIXELS = int(float(os.environ.get('VIDEO_MAX_PIXELS', 128000 * _GRID * _GRID * 0.9)))
+logger.info(f"set VIDEO_TOTAL_PIXELS: {VIDEO_TOTAL_PIXELS} (VISION_PATCH_SIZE={_DEFAULT_PATCH_SIZE}, grid={_GRID})")
 
 
 def round_by_factor(number: int, factor: int) -> int:
@@ -187,8 +191,14 @@ def smart_nframes(
             logger.warning(f"smart_nframes: nframes[{nframes}] > total_frames[{total_frames}]")
         nframes = min(min(max(nframes, min_frames), max_frames), total_frames)
         nframes = floor_by_factor(nframes, FRAME_FACTOR)
-    if not (FRAME_FACTOR <= nframes and nframes <= total_frames):
-        raise ValueError(f"nframes should in interval [{FRAME_FACTOR}, {total_frames}], but got {nframes}.")
+    # if not (FRAME_FACTOR <= nframes and nframes <= total_frames):
+    #     raise ValueError(f"nframes should in interval [{FRAME_FACTOR}, {total_frames}], but got {nframes}.")
+    if nframes < FRAME_FACTOR:
+        nframes = FRAME_FACTOR
+        print("<<<INFO>>> nframes < FRAME_FACTOR, set nframes to FRAME_FACTOR")
+    if nframes > total_frames:
+        nframes = total_frames
+        print("<<<INFO>>> nframes > total_frames, set nframes to total_frames")
     return nframes
 
 
@@ -448,10 +458,10 @@ FORCE_QWENVL_VIDEO_READER = os.getenv("FORCE_QWENVL_VIDEO_READER", None)
 def get_video_reader_backend() -> str:
     if FORCE_QWENVL_VIDEO_READER is not None:
         video_reader_backend = FORCE_QWENVL_VIDEO_READER
-    elif is_torchcodec_available():
-        video_reader_backend = "torchcodec"
     elif is_decord_available():
         video_reader_backend = "decord"
+    elif is_torchcodec_available():
+        video_reader_backend = "torchcodec"
     else:
         video_reader_backend = "torchvision"
     print(f"qwen-vl-utils using {video_reader_backend} to read video.", file=sys.stderr)

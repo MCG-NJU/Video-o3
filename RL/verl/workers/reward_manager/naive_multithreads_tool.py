@@ -18,6 +18,7 @@ from verl.utils.reward_score import _default_compute_score
 import torch
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import numpy as np
 # import logging
 # import json
 
@@ -54,6 +55,9 @@ class NaiveMultiThreadsToolRewardManager:
 
         # Decode each segment
         # decoded_responses = [tokenizer.decode(seg, skip_special_tokens=True) for seg in segments]
+        # np.set_printoptions(threshold=np.inf)
+        # torch.set_printoptions(threshold=float('inf'))
+        # print("response_ids: ", segments)
         decoded_responses = tokenizer.batch_decode(segments, skip_special_tokens=True)
         
         return decoded_responses
@@ -75,6 +79,9 @@ class NaiveMultiThreadsToolRewardManager:
         valid_response_ids = response_ids[:valid_response_length]
 
         # decode
+        # np.set_printoptions(threshold=np.inf)
+        # torch.set_printoptions(threshold=float('inf'))
+        # print("prompt_ids: ", valid_prompt_ids)
         prompt_str = self.tokenizer.decode(valid_prompt_ids, skip_special_tokens=True)
         # For multi turn, we maybe need `response_str` in a list format
         if 'multi_turn_response_mask' in data_item.batch:
@@ -85,6 +92,9 @@ class NaiveMultiThreadsToolRewardManager:
                 data_item.batch['multi_turn_response_mask']
             )
         else:
+            # np.set_printoptions(threshold=np.inf)
+            # torch.set_printoptions(threshold=float('inf'))
+            # print("response_ids: ", valid_response_ids)
             response_str = self.tokenizer.decode(valid_response_ids, skip_special_tokens=True)
             response_str = [response_str]
 

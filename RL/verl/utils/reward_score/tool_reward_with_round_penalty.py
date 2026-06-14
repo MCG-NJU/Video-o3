@@ -263,7 +263,7 @@ def calculate_grounding_acc(predict_str_list: list, ground_truth: list):
         else:
             diou = iou
     # print(f"<<<DEBUG>>>  calculate_grounding_acc  IoU: {iou}, IoP: {iop}, IoG: {iog}, DIoU: {diou}")
-    return (2*iou + iop + iog) / 4.0
+    return (iou + iop + iog + (diou + 1) / 2) / 4.0
 
 def compute_score(prompt: str, predict_str_list: list, ground_truth: list, extra_info: dict = None) -> float:
     acc_reward_weight = extra_info.get('acc_reward_weight', 1.0) if extra_info else 1.0
@@ -278,15 +278,13 @@ def compute_score(prompt: str, predict_str_list: list, ground_truth: list, extra
     acc_score = acc_reward_weight * acc
     format_score = format_reward_weight * format_score
 
-    reference_round = len(ground_truth["clue"])
-
-    trajectory_guided_multiplier = 0
-    if tool_call_count > 0 and format_score == 1 and acc_score == 1:
-        turn_decay_factor = 1.0 - decay_penalty_weight * max(0, (tool_call_count - reference_round))
-        hybrid_clue_score = calculate_grounding_acc(predict_str_list, ground_truth)
-        base_additional_bonus = 1
-        trajectory_guided_multiplier = turn_decay_factor * (hybrid_clue_score + base_additional_bonus) / 2
-    score = acc_score * (1 + trajectory_guided_multiplier) + format_score
+    tool_reward = 0
+    if tool_call_count > 0 and format_score == 1 and acc_score == 1: #正确调用工具的同时答对问题，给予额外奖励
+        tool_score = 1.0 - decay_penalty_weight * (tool_call_count - 1)  #同样是调用工具的情况下，答对轮次少的奖励越高
+        grounding_score = calculate_grounding_acc(predict_str_list, ground_truth)
+        correct_answer_tool_bonus = 1
+        tool_reward = tool_score * (grounding_score + correct_answer_tool_bonus) / 2
+    score = acc_score + format_score + tool_reward
 
     return score, acc_score, format_score
 
@@ -334,7 +332,7 @@ if __name__ == '__main__':
     extra_info = {
         "acc_reward_weight": 1.0,
         "format_reward_weight": 1.0,
-        "use_trajectory_guided_multiplier_weight": 0.5,
+        "use_tool_reward_weight": 0.5,
         "gpt_extract_answer": True,
         "extract_answer_tags": "strict",
     }

@@ -50,7 +50,7 @@ from .function_tools import prepare_grounding_inputs_multi_turn, crop_image, get
 from vllm.distributed import parallel_state as vllm_ps
 from vllm import LLM, SamplingParams
 from verl.third_party.vllm import vllm_version
-from verl.models.transformers.qwen2_vl import get_rope_index
+from verl.models.transformers.rope_utils import get_rope_index
 from verl.utils.dataset.task_prompt import ERROR_INFO_MULTI_TURN_PROMPT
 from verl.utils.torch_functional import get_eos_mask, get_final_eos_mask, pad_2d_list_to_length, pad_sequence_to_length
 from verl.protocol import DataProtoItem
