@@ -24,6 +24,7 @@
 </div>
 
 ## :fire: Updates
+- [x] **2026/06/14**: 🔥🔥🔥Release the training and evaluation code for the Qwen3-VL version. See the [qwen3vl](https://github.com/MCG-NJU/Video-o3/tree/qwen3vl) branch.
 - [x] **2026/02/16**: 🔥🔥🔥Release the training code for SFT and RL.
 - [x] **2026/02/15**: 🔥🔥🔥Release the evaluation code for Video-o3.
 - [x] **2026/02/10**: 🔥🔥🔥Release the checkpoint of **[Video-o3 (RL)](https://huggingface.co/collections/MCG-NJU/video-o3)** and **[Video-o3 (SFT+RL)](https://huggingface.co/collections/MCG-NJU/video-o3)**.
